@@ -27,8 +27,8 @@
 -export([]).
 
 %% behavior callbacks:
--export([ init_per_cluster/2
-        , cleanup_per_cluster/3
+-export([ init_per_cluster/3
+        , cleanup_per_cluster/4
         , init_per_site/3
         , init_per_node/4
         ]).
@@ -40,7 +40,7 @@
 %%================================================================================
 
 -type conf() ::
-        #{ testcase := atom()
+        #{
          }.
 
 %%================================================================================
@@ -52,19 +52,16 @@
 %%================================================================================
 
 %% @private
-init_per_cluster(Conf, State) ->
-  Suffix = case Conf of
-             #{testcase := TC} -> [TC];
-             _                 -> []
-           end,
+init_per_cluster(ClusterId, _Conf, State) ->
+  Suffix = ClusterId,
   Timestamp = integer_to_binary(os:system_time(second)),
   {ok, CWD} = file:get_cwd(),
-  WD = filename:join([CWD, ?MODULE] ++ Suffix ++ [Timestamp]),
+  WD = filename:join([CWD, ?MODULE, Suffix, Timestamp]),
   ok = filelib:ensure_path(WD),
   {ok, State#{workdir => WD}}.
 
 %% @private
-cleanup_per_cluster(_Conf, Success, #{workdir := WD}) ->
+cleanup_per_cluster(_ClusterId, _Conf, Success, #{workdir := WD}) ->
   DoClean = case os:getenv("CLASSY_WORKDIR_CLEANUP") of
               "false" -> false;
               "true"  -> true;
@@ -80,8 +77,8 @@ cleanup_per_cluster(_Conf, Success, #{workdir := WD}) ->
   end.
 
 %% @private
-init_per_site(Site, _Conf, State = #{workdir := WDC}) ->
-  WDS = classy_lib:ensure_list(filename:join(WDC, Site)),
+init_per_site({_Cluster, Site}, _Conf, State = #{workdir := WDC}) ->
+  WDS = familiar_lib:ensure_list(filename:join(WDC, Site)),
   ok = filelib:ensure_path(WDS),
   {ok, State#{workdir := WDS}}.
 

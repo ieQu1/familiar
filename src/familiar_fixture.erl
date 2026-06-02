@@ -12,7 +12,7 @@
 %%
 %% <itemize>
 %% <li>`init_per_cluster' / `cleanup_per_cluster': executed by
-%% `familiar_cluster' during cluster initialization and
+%% `familiar_sup' during cluster initialization and
 %% termination.</li>
 %% <li>`init_per_site' / `cleanup_per_site': executed by
 %% `familiar_site' when the site is created or destroyed. Note:
@@ -25,8 +25,8 @@
 -module(familiar_fixture).
 
 %% API:
--export([ init_per_cluster/1
-        , cleanup_per_cluster/3
+-export([ init_per_cluster/2
+        , cleanup_per_cluster/4
 
         , init_per_site/3
         , cleanup_per_site/4
@@ -34,7 +34,7 @@
         , init_per_node/4
         , cleanup_per_node/4
 
-        , defaults/1
+        , defaults/0
         ]).
 
 -export_type([t/0, conf/0, state/0]).
@@ -49,9 +49,9 @@
 
 -type t() :: {module(), conf()}.
 
--callback init_per_cluster(conf(), state()) -> {ok, state()} | {error, _}.
+-callback init_per_cluster(familiar:cluster_id(), conf(), state()) -> {ok, state()} | {error, _}.
 
--callback cleanup_per_cluster(conf(), _Success :: boolean(), state()) -> ok | {error, _}.
+-callback cleanup_per_cluster(familiar:cluster_id(), conf(), _Success :: boolean(), state()) -> ok | {error, _}.
 
 -callback init_per_site(familiar:site(), conf(), state()) -> {ok, state()} | {error, _}.
 
@@ -61,8 +61,8 @@
 
 -callback cleanup_per_node(familiar:site(), node(), conf(), state()) -> ok | {error, _}.
 
--optional_callbacks([ init_per_cluster/2
-                    , cleanup_per_cluster/3
+-optional_callbacks([ init_per_cluster/3
+                    , cleanup_per_cluster/4
                     , init_per_site/3
                     , cleanup_per_site/4
                     , init_per_node/4
@@ -73,11 +73,11 @@
 %% API functions
 %%================================================================================
 
--spec init_per_cluster([t()]) -> {ok, state()} | {error, _}.
-init_per_cluster(Fixtures) ->
+-spec init_per_cluster(familiar:cluster_id(), [t()]) -> {ok, state()} | {error, _}.
+init_per_cluster(ClusterId, Fixtures) ->
   Ret = fold_init(
           fun({Module, Conf}, Acc) ->
-              safe_init_call(Module, init_per_cluster, [Conf, Acc])
+              safe_init_call(Module, init_per_cluster, [ClusterId, Conf, Acc])
           end,
           #{},
           Fixtures),
@@ -85,15 +85,15 @@ init_per_cluster(Fixtures) ->
     {ok, _} ->
       Ret;
     {error, OkFixtures, State, Reason} ->
-      cleanup_per_cluster(OkFixtures, false, State),
+      cleanup_per_cluster(ClusterId, OkFixtures, false, State),
       {error, Reason}
   end.
 
--spec cleanup_per_cluster([t()], boolean(), state()) -> ok.
-cleanup_per_cluster(Fixtures, Success, State) ->
+-spec cleanup_per_cluster(familiar:cluster_id(), [t()], boolean(), state()) -> ok.
+cleanup_per_cluster(ClusterId, Fixtures, Success, State) ->
   lists:foreach(
     fun({Module, Conf}) ->
-        safe_cleanup_call(Module, cleanup_per_cluster, [Conf, Success, State])
+        safe_cleanup_call(Module, cleanup_per_cluster, [ClusterId, Conf, Success, State])
     end,
     lists:reverse(Fixtures)).
 
@@ -145,8 +145,8 @@ cleanup_per_node(Fixtures, Site, Node, State) ->
     end,
     lists:reverse(Fixtures)).
 
-defaults(TestCase) ->
-  [ {familiar_workdir, #{testcase => TestCase}}
+defaults() ->
+  [ {familiar_workdir, #{}}
   , {familiar_code_path, #{}}
   , {familiar_logger, #{}}
   , {familiar_cover, #{}}

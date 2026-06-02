@@ -1,15 +1,18 @@
 %% -*- mode:erlang -*-
-{application, familiar, [
-    {description, "An OTP library"},
-    {vsn, "0.1.0"},
-    {registered, []},
-    {applications, [
-        kernel,
-        stdlib,
-        snabbkaffe
-    ]},
-    {env, []},
-    {modules, []},
-    {licenses, ["Apache-2.0"]},
-    {links, []}
+{application, familiar,
+ [ {description, "An application for managing test clusters"}
+ , {vsn, "0.1.0"}
+ , {registered, []}
+ , {applications,
+    [ kernel
+    , stdlib
+    , tools
+    , gproc
+    , snabbkaffe
+    ]}
+ , {mod, {familiar_main, []}}
+ , {env, []}
+ , {modules, []}
+ , {licenses, ["Apache-2.0"]}
+ , {links, []}
  ]}.

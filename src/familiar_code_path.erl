@@ -16,7 +16,7 @@
 -behavior(familiar_fixture).
 
 %% behavior callbacks:
--export([ init_per_cluster/2
+-export([ init_per_cluster/3
         , init_per_node/4
         ]).
 
@@ -33,7 +33,7 @@
 %%================================================================================
 
 %% @private
-init_per_cluster(Conf, State) ->
+init_per_cluster(_Cluster, Conf, State) ->
   CP = maps:get(code_paths, Conf, code:get_path()),
   {ok, State#{code_paths => CP}}.
 

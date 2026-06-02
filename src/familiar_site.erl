@@ -23,13 +23,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 %% internal exports:
--export([ start_link/4
+-export([ start_link/3
         ]).
 
--export_type([conf/0]).
-
 -include_lib("snabbkaffe/include/trace.hrl").
--include("familiar.hrl").
+-include("familiar_internal.hrl").
 
 %%================================================================================
 %% Type declarations
@@ -37,19 +35,10 @@
 
 -define(familiar_unknown_event, familiar_unknown_event).
 
--define(site(SITE), {n, l, {?MODULE, SITE}}).
--define(node_name(NODE), {n, l, {familiar_test_node, NODE}}).
--define(via(SITE), {via, gproc, ?site(SITE)}).
--define(call_via(SITE), {?MODULE, SITE}).
-
--type conf() ::
-            #{ peer => map()
-             , fixtures => [familiar_fixture:t()]
-             , _ => _
-             }.
+-define(call_via(CLUSTER, SITE), {?MODULE, CLUSTER, SITE}).
 
 -record(call_is_running, {}).
--record(call_start, {name :: node()}).
+-record(call_start, {opts :: map()}).
 -record(call_stop, {}).
 
 %%================================================================================
@@ -57,9 +46,17 @@
 %%================================================================================
 
 %% @private
--spec start_link(conf(), familiar_fixture:state(), familiar:site(), conf()) -> {ok, pid()}.
-start_link(CommonSpec, FixtureState, Site, Spec) ->
-  gen_server:start_link(?via(Site), ?MODULE, [CommonSpec, FixtureState, Site, Spec], []).
+-spec start_link(
+        familiar:site(),
+        familiar:site_conf(),
+        familiar_fixture:state()
+       ) -> {ok, pid()}.
+start_link({Cluster, Site}, Spec, FixtureState) ->
+  gen_server:start_link(
+    ?via(#fam_reg_site{cluster = Cluster, site = Site}),
+    ?MODULE,
+    [Cluster, FixtureState, Site, Spec],
+    []).
 
 %% @doc Is site running?
 -spec is_running(familiar:site()) -> boolean().
@@ -78,24 +75,30 @@ which_node(Site) ->
 %% @doc Start the site if stopped.
 %%
 %% Can return `{error, already_running}'.
--spec start(familiar:site()) -> ok | {error, _}.
+-spec start(familiar:site()) -> {ok, node()} | {error, _}.
 start(Site) ->
-  start(Site, binary_to_atom(Site)).
+  start(Site, #{}).
 
 %% @doc Start the site if stopped, using `NodeName' as a prefix for the node.
 %% Resulting node will be named `NodeName@Host'.
 %%
 %% Can return `{error, already_running}'.
--spec start(familiar:site(), atom()) -> ok | {error, _}.
-start(Site, NodeName) ->
-  gen_server:call(?via(Site), #call_start{name = NodeName}, infinity).
+-spec start(familiar:site(), peer:start_options()) -> {ok, node()} | {error, _}.
+start({ClusterId, SiteId}, PeerOptions) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_start{opts = PeerOptions},
+    infinity).
 
 %% @doc Stop the site's node.
 %%
 %% Note: this function doesn't destroy the site: it can be restarted later.
 -spec stop(familiar:site()) -> ok.
-stop(Site) ->
-  gen_server:call(?via(Site), #call_stop{}, infinity).
+stop({ClusterId, SiteId}) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_stop{},
+    infinity).
 
 %% @doc Execute MFA on the site.
 %% Site must be running.
@@ -130,45 +133,27 @@ call(Site, Fun, Timeout) ->
 %%================================================================================
 
 -record(s,
-        { site               :: familiar:site()
+        { cluster            :: familiar:cluster_id()
+        , site               :: familiar:site_id()
         , pid                :: pid() | undefined
         , name               :: atom()
         , node               :: node() | undefined
-        , spec               :: conf()
+        , spec               :: familiar:cluster_conf()
         , fixture_state      :: familiar_fixture:state()
         , node_fixture_state :: map() | undefined
         , my_path            :: string()
         }).
 
 %% @private
-init([CommonSpec, FixtureState0, Site, CustomSiteSpec]) ->
+init([Cluster, FixtureState0, Site, SiteSpec]) ->
   process_flag(trap_exit, true),
   MyPath = filename:dirname(code:which(?MODULE)),
-  DefaultCommonSpec =
-    #{ peer =>
-         #{ longnames => true
-          , peer_down => stop
-          , host => "127.0.0.1"
-          , shutdown => 4_000
-          , args => ["+S", "1:1"]
-          }
-     },
-  DefaultSiteSpec =
-    #{ peer => #{name => binary_to_atom(Site)}
-     },
-  SiteSpec = lists:foldr(
-               fun familiar_cluster:merge_conf/2,
-               #{},
-               [ DefaultCommonSpec
-               , CommonSpec
-               , DefaultSiteSpec
-               , CustomSiteSpec
-               ]),
   ?tp(debug, familiar_site_init, SiteSpec),
   #{fixtures := Fixtures} = SiteSpec,
-  case familiar_fixture:init_per_site(Fixtures, Site, FixtureState0) of
+  case familiar_fixture:init_per_site(Fixtures, {Cluster, Site}, FixtureState0) of
     {ok, FixtureState} ->
-      {ok, #s{ site          = Site
+      {ok, #s{ cluster       = Cluster
+             , site          = Site
              , spec          = SiteSpec
              , fixture_state = FixtureState
              , my_path       = MyPath
@@ -178,12 +163,12 @@ init([CommonSpec, FixtureState0, Site, CustomSiteSpec]) ->
   end.
 
 %% @private
-handle_call(#call_start{name = Name}, _From, S0 = #s{pid = Pid}) ->
+handle_call(#call_start{opts = StartOpts}, _From, S0 = #s{pid = Pid}) ->
   case Pid of
     undefined ->
-      case do_start(Name, S0) of
-        {ok, S} ->
-          {reply, ok, S};
+      case do_start(StartOpts, S0) of
+        {ok, Node, S} ->
+          {reply, {ok, Node}, S};
         {error, _} = Err ->
           {reply, Err, S0}
       end;
@@ -233,16 +218,18 @@ handle_info(Info, S) ->
   {noreply, S}.
 
 %% @private
-terminate(Reason, S0 = #s{site = Site, spec = Spec, fixture_state = FS}) ->
+terminate(Reason, S0 = #s{cluster = Cluster, site = Site, spec = Spec, fixture_state = FS}) ->
+  ?tp(warning, "Terminating site", #{}),
   familiar_lib:is_normal_exit(Reason) orelse
     ?tp(warning, ?familiar_abnormal_exit,
         #{ server => ?MODULE
          , reason => Reason
          }),
   _ = do_stop(S0),
-  Success = familiar_cluster:exit_success(Reason),
+  %% Success = familiar_sup:exit_success(Reason), FIXME
+  Success = true,
   #{fixtures := Fixtures} = Spec,
-  familiar_fixture:cleanup_per_site(Fixtures, Site, Success, FS),
+  familiar_fixture:cleanup_per_site(Fixtures, {Cluster, Site}, Success, FS),
   ?tp(familiar_test_site_destroyed, #{site => Site});
 terminate(_Reason, _) ->
   ok.
@@ -255,67 +242,59 @@ terminate(_Reason, _) ->
 %% Internal functions
 %%================================================================================
 
-do_start(Name, S0) ->
-  #s{ site = Site
+do_start(CustomOpts, S0) ->
+  #s{ cluster = Cluster
+    , site = Site
     , spec = #{ fixtures := Fixtures
-              , peer     := Peer
+              , peer     := DefaultPeerOpts
               }
     , fixture_state = FS
     , my_path = MyPath
     } = S0,
   #{ args := Args0
-   } = Peer,
-  Args = [ "-pa", MyPath
-         , "-setcookie", atom_to_list(erlang:get_cookie())
-         ],
-  case gproc:register_name(?node_name(Name), self()) of
-    yes ->
-      StartArgs = Peer#{ name => Name
-                       , args => Args0 ++ Args
-                       },
-      ?tp(debug, familiar_test_site_start, #{site => Site}),
-      {ok, Pid, Node} = peer:start_link(StartArgs),
-      S = S0#s{ name = Name
-              , pid = Pid
-              , node = Node
-              },
-      persistent_term:put(?call_via(Site), {erpc, Node}),
-      case familiar_test_fixture:init_per_node(Fixtures, Site, Node, FS) of
-        {ok, NFS} ->
-          {ok, S#s{node_fixture_state = NFS}};
-        {error, _} = Err ->
-          {ok, _} = do_stop(S),
-          Err
-      end;
-    no ->
-      {error, {node_name_conflict, Name}}
+   } = PeerOpts0 = maps:merge(DefaultPeerOpts, CustomOpts),
+  MandatoryArgs = [ "-pz", MyPath
+                  , "-setcookie", atom_to_list(erlang:get_cookie())
+                  ],
+  PeerOpts = PeerOpts0#{args => Args0 ++ MandatoryArgs},
+  ?tp(debug, familiar_test_site_start, #{site => Site, peer => PeerOpts}),
+  {ok, Pid, Node} = peer:start_link(PeerOpts),
+  S = S0#s{ pid = Pid
+          , node = Node
+          },
+  persistent_term:put(?call_via(Cluster, Site), {erpc, Node}),
+  case familiar_fixture:init_per_node(Fixtures, {Cluster, Site}, Node, FS) of
+    {ok, NFS} ->
+      {ok, Node, S#s{node_fixture_state = NFS}};
+    {error, _} = Err ->
+      {ok, _} = do_stop(S),
+      Err
   end.
 
 do_stop(S = #s{pid = undefined}) ->
   {ok, S};
 do_stop(S) ->
-  #s{ spec = #{fixtures := Fixtures}
+  #s{ spec = #{id := Cluster, fixtures := Fixtures}
+    , cluster = Cluster
     , site = Site
-    , name = Name
     , pid = Pid
     , node = Node
     , node_fixture_state = NFS
     } = S,
   is_map(NFS) andalso
-    familiar_fixture:cleanup_per_node(Fixtures, Site, Node, NFS),
-  persistent_term:erase(?call_via(Site)),
+    familiar_fixture:cleanup_per_node(Fixtures, {Cluster, Site}, Node, NFS),
+  persistent_term:erase(?call_via(Cluster, Site)),
   unlink(Pid),
   peer:stop(Pid),
   ?tp(debug, familiar_test_site_stop, #{site => Site}),
-  catch gproc:unregister_name(?node_name(Name)),
   {ok, S#s{ pid = undefined
           , node = undefined
           , name = undefined
           , node_fixture_state = undefined
           }}.
 
-call_method(Site) ->
-  case persistent_term:get(?call_via(Site), undefined) of
+call_method({ClusterId, SiteId} = Site) ->
+  case persistent_term:get(?call_via(ClusterId, SiteId), undefined) of
     undefined ->
       error({site_is_not_running, Site});
     Other ->
