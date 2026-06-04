@@ -8,6 +8,7 @@
 %% API:
 -export([ is_running/1
         , which_node/1
+        , last_node/1
 
         , start/1
         , start/2
@@ -41,6 +42,7 @@
 -record(call_is_running, {}).
 -record(call_start, {opts :: map()}).
 -record(call_stop, {}).
+-record(call_last_node, {}).
 
 %%================================================================================
 %% API functions
@@ -61,8 +63,11 @@ start_link({Cluster, Site}, Spec, FixtureState) ->
 
 %% @doc Is site running?
 -spec is_running(familiar:site()) -> boolean().
-is_running(Site) ->
-  gen_server:call(?via(Site), #call_is_running{}).
+is_running({ClusterId, SiteId}) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_is_running{},
+    infinity).
 
 %% @doc Return current node name of the site.
 %% Throws an error if site is not running.
@@ -72,6 +77,15 @@ which_node(Site) ->
     {erpc, Node} ->
       Node
   end.
+
+%% @doc Get last node name used by the site.
+%% It is equal to `familiar_site:which_node' if the site is currently running.
+-spec last_node(familiar:site()) -> {ok, node()} | undefined.
+last_node({ClusterId, SiteId}) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_last_node{},
+    infinity).
 
 %% @doc Start the site if stopped.
 %%
@@ -147,6 +161,7 @@ call(Site, Fun, Timeout) ->
         , pid                :: pid() | undefined
         , name               :: atom()
         , node               :: node() | undefined
+        , last_node          :: {ok, node()} | undefined
         , spec               :: familiar:cluster_conf()
         , fixture_state      :: familiar_fixture:state()
         , node_fixture_state :: map() | undefined
@@ -195,6 +210,8 @@ handle_call(#call_stop{}, _From, S0 = #s{pid = Pid}) ->
 handle_call(#call_is_running{}, _From, S = #s{pid = Pid}) ->
   Reply = is_pid(Pid) andalso is_process_alive(Pid),
   {reply, Reply, S};
+handle_call(#call_last_node{}, _From, S = #s{last_node = LastNode}) ->
+  {reply, LastNode, S};
 handle_call(Call, From, S) ->
   ?tp(warning, ?familiar_unknown_event,
       #{ kind => call
@@ -269,6 +286,7 @@ do_start(CustomOpts, S0) ->
   {ok, Pid, Node} = peer:start_link(PeerOpts),
   S = S0#s{ pid = Pid
           , node = Node
+          , last_node = {ok, Node}
           },
   persistent_term:put(?call_via(Cluster, Site), {erpc, Node}),
   case familiar_fixture:init_per_node(Fixtures, {Cluster, Site}, Node, FS) of
