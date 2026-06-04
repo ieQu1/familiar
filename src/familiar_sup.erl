@@ -4,9 +4,6 @@
 
 %% @private A process that manages test clusters.
 %%
-%% This module is not part of the classy runtime,
-%% but it's useful for testing the business apps based on classy.
-%%
 %% Cluster configuration:
 %% <itemize>
 %% <li>`peer': <a href="https://www.erlang.org/doc/apps/stdlib/peer.html#t:start_options/0">peer</a> start options.
@@ -19,7 +16,7 @@
 -behavior(supervisor).
 
 %% API:
--export([start_link_top/0, start_cluster/1, start_site/4]).
+-export([start_link_top/0, start_cluster/1, stop_cluster/1, start_site/4]).
 
 %% behavior callbacks:
 -export([init/1]).
@@ -65,6 +62,10 @@ start_link_sites_sup(ID) ->
 start_cluster(Conf) ->
   supervisor:start_child(?top, [Conf]).
 
+-spec stop_cluster(pid()) -> ok.
+stop_cluster(Pid) ->
+  supervisor:terminate_child(?top, Pid).
+
 %% @doc Create a site, if not created yet.
 %% Note: this function doesn't start the site.
 -spec start_site(
@@ -99,21 +100,22 @@ init(top) ->
   {ok, {SupFlags, [Children]}};
 init({cluster, Conf}) ->
   #{id := ID} = Conf,
-  SupFlags = #{ strategy  => one_for_all
-              , intensity => 1
-              , period    => 1
+  SupFlags = #{ strategy      => one_for_all
+              , intensity     => 0
+              , period        => 10
+              , auto_shutdown => never
               },
-  Children = [ #{ id => cluster_manager
-                , type => worker
-                , restart => permanent
-                , start => {familiar_cluster, start_link, [self(), Conf]}
-                , shutdown => 500
+  Children = [ #{ id       => cluster_manager
+                , type     => worker
+                , restart  => permanent
+                , start    => {familiar_cluster, start_link, [self(), Conf]}
+                , shutdown => 5_000
                 }
-             , #{ id => sites
-                , type => supervisor
-                , restart => permanent
-                , start => {?MODULE, start_link_sites_sup, [ID]}
-                , shutdown => 500
+             , #{ id       => sites
+                , type     => supervisor
+                , restart  => permanent
+                , start    => {?MODULE, start_link_sites_sup, [ID]}
+                , shutdown => infinity
                 }
              ],
   {ok, {SupFlags, Children}};
@@ -127,20 +129,10 @@ init(sites) ->
               , type     => worker
               , start    => {familiar_site, start_link, []}
               , shutdown => 15_000
-              , restart  => permanent
+              , restart  => transient
               },
   {ok, {SupFlags, [Children]}}.
 
 %%================================================================================
 %% Internal functions
 %%================================================================================
-
-%% ensure_child(Sup, Args) ->
-%%   case supervisor:start_child(Sup, Args) of
-%%     {ok, _} = Ok ->
-%%       Ok;
-%%     {error, {already_started, Pid}} ->
-%%       {ok, Pid};
-%%     Err ->
-%%       Err
-%%   end.

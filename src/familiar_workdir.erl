@@ -7,7 +7,7 @@
 %% By default, working directories are deleted when the cluster is stopped with reason
 %% `shutdown' or `normal'.
 %%
-%% This behavior can be overridden by setting a Linux environment variable `CLASSY_WORKDIR_CLEANUP':
+%% This behavior can be overridden by setting a Linux environment variable `FAMILIAR_WORKDIR_CLEANUP':
 %% <itemize>
 %% <li>`true': Always delete</li>
 %% <li>`false': Never delete</li>
@@ -62,7 +62,7 @@ init_per_cluster(ClusterId, _Conf, State) ->
 
 %% @private
 cleanup_per_cluster(_ClusterId, _Conf, Success, #{workdir := WD}) ->
-  DoClean = case os:getenv("CLASSY_WORKDIR_CLEANUP") of
+  DoClean = case os:getenv("FAMILIAR_WORKDIR_CLEANUP") of
               "false" -> false;
               "true"  -> true;
               _       -> Success

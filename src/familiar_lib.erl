@@ -4,7 +4,7 @@
 -module(familiar_lib).
 
 %% API:
--export([is_normal_exit/1, ensure_list/1, sync_stop_proc/3, get_ip_addr/3]).
+-export([is_normal_exit/1, ensure_list/1, get_ip_addr/3]).
 
 -export_type([]).
 
@@ -31,25 +31,6 @@ ensure_list(L) when is_list(L) ->
   L;
 ensure_list(Bin) when is_binary(Bin) ->
   binary_to_list(Bin).
-
-
-%% @doc Send exit signal `Reason' to a process and wait for the shutdown.
--spec sync_stop_proc(pid() | atom(), _ExitReason, timeout()) -> ok | {error, timeout}.
-sync_stop_proc(undefined, _, _) ->
-  ok;
-sync_stop_proc(Name, Reason, Timeout) when is_atom(Name) ->
-  sync_stop_proc(whereis(Name), Reason, Timeout);
-sync_stop_proc(Pid, Reason, Timeout) when is_pid(Pid) ->
-  unlink(Pid),
-  MRef = monitor(process, Pid),
-  exit(Pid, Reason),
-  logger:warning("Sys state ~p: ~p", [Pid, sys:get_state(Pid)]),
-  receive
-    {'DOWN', MRef, process, _, _} ->
-      ok
-  after Timeout ->
-      {error, timeout}
-  end.
 
 -spec get_ip_addr(Addr, 0..32, non_neg_integer()) -> {ok, Addr} | {error, subnet_is_too_small}
           when Addr :: {byte(), byte(), byte(), byte()}.

@@ -21,6 +21,9 @@
 -record(fam_reg_cluster_man, {cluster :: familiar:cluster_id()}).
 -record(fam_reg_site, {cluster :: familiar:cluster_id(), site :: familiar:site()}).
 
+-define(familiar_cluster_terminate, familiar_cluster_terminate).
+-define(familiar_site_terminate, familiar_site_terminate).
+
 -define(name(NAME), {n, l, NAME}).
 -define(via(NAME), {via, gproc, ?name(NAME)}).
 

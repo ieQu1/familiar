@@ -12,6 +12,7 @@
         , start/1
         , start/2
         , stop/1
+        , stop/2
 
         , call/2
         , call/3
@@ -90,6 +91,10 @@ start({ClusterId, SiteId}, PeerOptions) ->
     #call_start{opts = PeerOptions},
     infinity).
 
+-spec stop(familiar:cluster_id(), familiar:site_id()) -> ok.
+stop(ClusterId, SiteId) ->
+  stop({ClusterId, SiteId}).
+
 %% @doc Stop the site's node.
 %%
 %% Note: this function doesn't destroy the site: it can be restarted later.
@@ -102,26 +107,30 @@ stop({ClusterId, SiteId}) ->
 
 %% @doc Execute MFA on the site.
 %% Site must be running.
--spec call(familiar:site(), module(), atom(), list()) -> _.
+-spec call(familiar:site() | node(), module(), atom(), list()) -> _.
 call(Site, Module, Function, Args) ->
   call(Site, Module, Function, Args, 5_000).
 
 %% @doc Execute MFA on the site.
 %% Site must be running.
--spec call(familiar:site(), module(), atom(), list(), timeout()) -> _.
+-spec call(familiar:site() | node(), module(), atom(), list(), timeout()) -> _.
+call(Node, Module, Function, Args, Timeout) when is_atom(Node) ->
+  erpc:call(Node, Module, Function, Args, Timeout);
 call(Site, Module, Function, Args, Timeout) ->
   case call_method(Site) of
     {erpc, Node} ->
       erpc:call(Node, Module, Function, Args, Timeout)
   end.
 
--spec call(familiar:site(), fun(() -> Ret)) -> Ret.
-call(Site, Fun) ->
-  call(Site, Fun, 5_000).
+-spec call(familiar:site() | node(), fun(() -> Ret)) -> Ret.
+call(SiteOrNode, Fun) ->
+  call(SiteOrNode, Fun, 5_000).
 
 %% @doc Execute `Fun' on the site.
 %% Site must be running.
--spec call(familiar:site(), fun(() -> Ret), timeout()) -> Ret.
+-spec call(familiar:site() | node(), fun(() -> Ret), timeout()) -> Ret.
+call(Node, Fun, Timeout) when is_atom(Node) ->
+  erpc:call(Node, Fun, Timeout);
 call(Site, Fun, Timeout) ->
   case call_method(Site) of
     {erpc, Node} ->
@@ -219,15 +228,14 @@ handle_info(Info, S) ->
 
 %% @private
 terminate(Reason, S0 = #s{cluster = Cluster, site = Site, spec = Spec, fixture_state = FS}) ->
-  ?tp(warning, "Terminating site", #{}),
+  Success = not familiar_cluster:isfail(Cluster),
+  ?tp(debug, ?familiar_site_terminate, #{success => Success, cluster => Cluster, site => Site}),
   familiar_lib:is_normal_exit(Reason) orelse
     ?tp(warning, ?familiar_abnormal_exit,
         #{ server => ?MODULE
          , reason => Reason
          }),
   _ = do_stop(S0),
-  %% Success = familiar_sup:exit_success(Reason), FIXME
-  Success = true,
   #{fixtures := Fixtures} = Spec,
   familiar_fixture:cleanup_per_site(Fixtures, {Cluster, Site}, Success, FS),
   ?tp(familiar_test_site_destroyed, #{site => Site});

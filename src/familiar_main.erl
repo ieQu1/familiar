@@ -21,7 +21,8 @@
 %%================================================================================
 
 start(_StartType, _StartArgs) ->
-   familiar_sup:start_link_top().
+  familiar_cluster:tables(),
+  familiar_sup:start_link_top().
 
 stop(_) ->
   ok.

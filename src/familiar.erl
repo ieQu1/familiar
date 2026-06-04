@@ -36,6 +36,7 @@
 
 -type site_conf() ::
         #{ peer => peer:start_options()
+         , start => boolean()
          }.
 
 %%================================================================================
@@ -46,25 +47,47 @@
 start_link_cluster(Conf0) ->
   maybe
     {ok, Conf} ?= with_defaults(Conf0),
-    _ = application:ensure_all_started(familiar),
+    {ok, _} = application:ensure_all_started(familiar),
     %% TODO: check if short names are used
-    ensure_distr(#{}),
+    ok = ensure_distr(#{}),
     {ok, Sup} = familiar_sup:start_cluster(Conf),
     link(Sup),
     ok
   end.
 
--spec stop_cluster(cluster_id(), term()) -> ok.
-stop_cluster(ClusterId, Reason) ->
-  familiar_cluster:stop(ClusterId, Reason).
+-spec stop_cluster(cluster_id(), boolean()) -> ok.
+stop_cluster(ClusterId, Success) when is_boolean(Success) ->
+  familiar_cluster:stop(ClusterId, Success).
 
 -spec create_site(cluster_id(), site_id()) -> ok | {error, _}.
 create_site(Cluster, Site) ->
   create_site(Cluster, Site, #{}).
 
--spec create_site(cluster_id(), site_id(), site_conf()) -> ok | {error, _}.
-create_site(Cluster, Site, SiteConf) ->
-  familiar_cluster:create_site(Cluster, Site, SiteConf).
+-spec create_site(cluster_id(), site_id(), site_conf()) -> {ok, site()} | {ok, site(), node()} | {error, _}.
+create_site(Cluster, SiteId, SiteConf0) ->
+  case maps:take(start, SiteConf0) of
+    {Start, SiteConf} ->
+      ok;
+    error ->
+      Start = false,
+      SiteConf = SiteConf0
+  end,
+  case familiar_cluster:create_site(Cluster, SiteId, SiteConf) of
+    {ok, Site} ->
+      case Start of
+        false ->
+          {ok, Site};
+        true ->
+          case start_site(Site, maps:get(peer, SiteConf, #{})) of
+            {ok, Node} ->
+              {ok, Site, Node};
+            {error, _} = Err ->
+              Err
+          end
+      end;
+    {error, _} = Err ->
+      Err
+  end.
 
 -spec start_site(site()) -> {ok, node()} | {error, _}.
 start_site(Site) ->
