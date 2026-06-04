@@ -10,7 +10,17 @@
         , create_site/2
         , start_site/1
         , start_site/2
+        , which_node/1
+        , last_node/1
+        , stop_site/1
+        , stop_site/2
         , ensure_distr/1
+        , default_fixtures/0
+
+        , call/2
+        , call/3
+        , call/4
+        , call/5
         ]).
 
 -export_type([cluster_id/0, site_id/0, site/0, cluster_conf/0, site_conf/0]).
@@ -97,6 +107,29 @@ start_site(Site) ->
 start_site(Site, Options) ->
   familiar_site:start(Site, Options).
 
+%% @doc Return current node name of the site.
+%% Throws an error if site is not running.
+-spec which_node(site()) -> node().
+which_node(Site) ->
+  familiar_site:which_node(Site).
+
+%% @doc Get last node name used by the site.
+%% It is equal to `familiar_site:which_node' if the site is currently running.
+-spec last_node(site()) -> {ok, node()} | undefined.
+last_node(Site) ->
+  familiar_site:last_node(Site).
+
+%% @doc Stop the site's node.
+%%
+%% Note: this function doesn't destroy the site: it can be restarted later.
+-spec stop_site(site()) -> ok.
+stop_site(Site) ->
+  familiar_site:stop(Site).
+
+-spec stop_site(cluster_id(), site_id()) -> ok.
+stop_site(Cluster, Site) ->
+  familiar_site:stop({Cluster, Site}).
+
 -spec ensure_distr(#{name => atom(), _ => _}) -> ok.
 ensure_distr(Opts0) ->
   case maps:take(name, Opts0) of
@@ -115,6 +148,30 @@ ensure_distr(Opts0) ->
     Err ->
       Err
   end.
+
+-spec default_fixtures() -> [familiar_fixture:t()].
+default_fixtures() ->
+  familiar_fixture:defaults().
+
+-spec call(site(), fun(() -> Ret)) -> Ret.
+call(Site, Fun) when is_function(Fun, 0) ->
+  familiar_site:call(Site, Fun).
+
+%% @doc Execute `Fun' on the site.
+%% Site must be running.
+-spec call(familiar:site(), fun(() -> Ret), timeout()) -> Ret.
+call(Site, Fun, Timeout) when is_function(Fun, 0) ->
+  familiar_site:call(Site, Fun, Timeout).
+
+%% @doc Execute Module:Function(Args) on Site.
+-spec call(familiar:site() | node(), module(), atom(), list()) -> _.
+call(Site, Module, Function, Args) when is_atom(Module), is_atom(Function), is_list(Args) ->
+  familiar_site:call(Site, Module, Function, Args).
+
+%% @doc Execute Module:Function(Args) on Site with Timeout.
+-spec call(familiar:site() | node(), module(), atom(), list(), timeout()) -> _.
+call(Site, Module, Function, Args, Timeout) when is_atom(Module), is_atom(Function), is_list(Args) ->
+  familiar_site:call(Site, Module, Function, Args, Timeout).
 
 %%================================================================================
 %% Internal functions

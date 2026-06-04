@@ -13,7 +13,6 @@
         , start/1
         , start/2
         , stop/1
-        , stop/2
 
         , call/2
         , call/3
@@ -69,8 +68,6 @@ is_running({ClusterId, SiteId}) ->
     #call_is_running{},
     infinity).
 
-%% @doc Return current node name of the site.
-%% Throws an error if site is not running.
 -spec which_node(familiar:site()) -> node().
 which_node(Site) ->
   case call_method(Site) of
@@ -78,8 +75,6 @@ which_node(Site) ->
       Node
   end.
 
-%% @doc Get last node name used by the site.
-%% It is equal to `familiar_site:which_node' if the site is currently running.
 -spec last_node(familiar:site()) -> {ok, node()} | undefined.
 last_node({ClusterId, SiteId}) ->
   gen_server:call(
@@ -105,13 +100,6 @@ start({ClusterId, SiteId}, PeerOptions) ->
     #call_start{opts = PeerOptions},
     infinity).
 
--spec stop(familiar:cluster_id(), familiar:site_id()) -> ok.
-stop(ClusterId, SiteId) ->
-  stop({ClusterId, SiteId}).
-
-%% @doc Stop the site's node.
-%%
-%% Note: this function doesn't destroy the site: it can be restarted later.
 -spec stop(familiar:site()) -> ok.
 stop({ClusterId, SiteId}) ->
   gen_server:call(
@@ -127,24 +115,20 @@ call(Site, Module, Function, Args) ->
 
 %% @doc Execute MFA on the site.
 %% Site must be running.
--spec call(familiar:site() | node(), module(), atom(), list(), timeout()) -> _.
-call(Node, Module, Function, Args, Timeout) when is_atom(Node) ->
-  erpc:call(Node, Module, Function, Args, Timeout);
+-spec call(familiar:site(), module(), atom(), list(), timeout()) -> _.
 call(Site, Module, Function, Args, Timeout) ->
   case call_method(Site) of
     {erpc, Node} ->
       erpc:call(Node, Module, Function, Args, Timeout)
   end.
 
--spec call(familiar:site() | node(), fun(() -> Ret)) -> Ret.
+-spec call(familiar:site(), fun(() -> Ret)) -> Ret.
 call(SiteOrNode, Fun) ->
   call(SiteOrNode, Fun, 5_000).
 
 %% @doc Execute `Fun' on the site.
 %% Site must be running.
--spec call(familiar:site() | node(), fun(() -> Ret), timeout()) -> Ret.
-call(Node, Fun, Timeout) when is_atom(Node) ->
-  erpc:call(Node, Fun, Timeout);
+-spec call(familiar:site(), fun(() -> Ret), timeout()) -> Ret.
 call(Site, Fun, Timeout) ->
   case call_method(Site) of
     {erpc, Node} ->
