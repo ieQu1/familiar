@@ -32,11 +32,12 @@
 -record(call_setfail, {}).
 
 -type conf() ::
-        #{ id := familiar:cluster_id()
-         , fixtures := [familiar_fixture:t()]
-         , peer := peer:start_options()
-         , net := {byte(), byte(), byte(), byte()}
-         , subnet := 0..32
+        #{ id            := familiar:cluster_id()
+         , auto_shutdown := boolean()
+         , fixtures      := [familiar_fixture:t()]
+         , peer          := peer:start_options()
+         , net           := {byte(), byte(), byte(), byte()}
+         , subnet        := 0..32
          }.
 
 %%================================================================================

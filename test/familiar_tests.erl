@@ -20,6 +20,20 @@ start_stop_test_() ->
        ?assertEqual(ok, familiar:stop_cluster(Cluster, true))
    end}.
 
+badconf_test_() ->
+  {timeout, ?timeout,
+   fun() ->
+       ?assertMatch(
+          {error, badarg},
+          familiar:start_link_cluster(foo)),
+       ?assertMatch(
+          {error, bad_cluster_id},
+          familiar:start_link_cluster(#{})),
+       ?assertMatch(
+          {error, {bad_fixtures, _}},
+          familiar:start_link_cluster(#{id => foo, fixtures => 1}))
+   end}.
+
 simple_test_() ->
   {timeout, ?timeout,
    fun() ->

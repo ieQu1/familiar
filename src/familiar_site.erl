@@ -34,8 +34,6 @@
 %% Type declarations
 %%================================================================================
 
--define(familiar_unknown_event, familiar_unknown_event).
-
 -define(call_via(CLUSTER, SITE), {?MODULE, CLUSTER, SITE}).
 
 -record(call_is_running, {}).

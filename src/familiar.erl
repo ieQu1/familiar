@@ -26,6 +26,12 @@
 
 -export_type([cluster_id/0, site_id/0, site/0, cluster_conf/0, site_conf/0]).
 
+%% Internal exports
+-export([cluster_proxy_entrypoint/2]).
+
+-include_lib("snabbkaffe/include/trace.hrl").
+-include("familiar_internal.hrl").
+
 -ifdef(TEST).
 -include_lib("proper/include/proper.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -60,16 +66,8 @@
 %%================================================================================
 
 -spec start_link_cluster(cluster_conf()) -> ok | {error, _}.
-start_link_cluster(Conf0) ->
-  maybe
-    {ok, Conf} ?= with_defaults(Conf0),
-    {ok, _} = application:ensure_all_started(familiar),
-    %% TODO: check if short names are used
-    ok = ensure_distr(#{}),
-    {ok, Sup} = familiar_sup:start_cluster(Conf),
-    link(Sup),
-    ok
-  end.
+start_link_cluster(Conf) ->
+  proc_lib:start_link(?MODULE, cluster_proxy_entrypoint, [self(), Conf]).
 
 -spec stop_cluster(cluster_id(), boolean()) -> ok.
 stop_cluster(ClusterId, Success) when is_boolean(Success) ->
@@ -184,29 +182,88 @@ call(Site, Module, Function, Args, Timeout) when is_atom(Module), is_atom(Functi
   familiar_site:call(Site, Module, Function, Args, Timeout).
 
 %%================================================================================
+%% Internal exports
+%%================================================================================
+
+-spec cluster_proxy_entrypoint(pid(), familiar:cluster_conf()) -> no_return().
+cluster_proxy_entrypoint(Parent, Conf0) ->
+  process_flag(trap_exit, true),
+  maybe
+    {ok, Conf} ?= with_defaults(Conf0),
+    #{id := ClusterId, auto_shutdown := AutoShutdown} = Conf,
+    {ok, _} = application:ensure_all_started(familiar),
+    %% TODO: check if short names are used
+    ok = ensure_distr(#{}),
+    {ok, Sup} = familiar_sup:start_cluster(Conf),
+    link(Sup),
+    proc_lib:init_ack(Parent, ok),
+    proxy_loop(ClusterId, AutoShutdown, Parent, Sup)
+  else
+    Err ->
+      proc_lib:init_ack(Parent, Err)
+  end.
+
+%%================================================================================
 %% Internal functions
 %%================================================================================
 
+proxy_loop(ClusterId, AutoShutdown, Parent, Sup) ->
+  receive
+    {'EXIT', Sup, Reason} ->
+      case familiar_lib:is_normal_exit(Reason) of
+        true ->
+          ok;
+        false ->
+          exit(Reason)
+      end;
+    {'EXIT', Parent, Reason} when AutoShutdown ->
+      Success = familiar_lib:is_normal_exit(Reason),
+      ?tp(info, familiar_cluster_shut_down, #{cluster => ClusterId, success => Success}),
+      stop_cluster(ClusterId, Success);
+    {'EXIT', Parent, _} ->
+      ok;
+    Msg ->
+      ?tp(info, ?familiar_unknown_event,
+          #{ server  => cluster_proxy
+           , cluster => ClusterId
+           , event   => Msg
+           , parent  => Parent
+           , sup     => Sup
+           }),
+      proxy_loop(ClusterId, AutoShutdown, Parent, Sup)
+  end.
+
 ensure_epmd() ->
-    open_port({spawn, "epmd"}, []).
+  open_port({spawn, "epmd"}, []).
 
 -spec with_defaults(cluster_conf()) -> {ok, familiar_cluster:conf()} | {error, _}.
 with_defaults(Conf) when is_map(Conf) ->
   maybe
+    {ok, AutoShutdown} ?= verify_auto_shutdown(Conf),
     {ok, Id} ?= verify_id(Conf),
     {ok, Fixtures} ?= verify_fixtures(Conf),
     {ok, Net, SubNet} ?= verify_net(Conf),
     {ok, Peer} ?= verify_peer(Conf),
     {ok,
-     #{ id => Id
-      , fixtures => Fixtures
-      , peer => Peer
-      , net => Net
-      , subnet => SubNet
+     #{ id            => Id
+      , auto_shutdown => AutoShutdown
+      , fixtures      => Fixtures
+      , peer          => Peer
+      , net           => Net
+      , subnet        => SubNet
       }}
   end;
 with_defaults(_Conf) ->
   {error, badarg}.
+
+verify_auto_shutdown(#{auto_shutdown := AS}) ->
+  if is_boolean(AS) ->
+      {ok, AS};
+     true ->
+      {error, bad_auto_shutdown}
+  end;
+verify_auto_shutdown(#{}) ->
+  {ok, true}.
 
 verify_id(#{id := Id}) when Id =/= undefined ->
   {ok, Id};
@@ -264,7 +321,14 @@ cluster_conf() ->
   oneof(
     [ term()
     , map()
-    , #{id => term(), fixtures => list(), peer => map(), net => tuple(), subnet => number()}
+    , ?LET({Id, AS, Fix, Peer, Net, SubNet}, {term(), term(), term(), map(), term(), term()},
+           #{ id => term()
+            , auto_shutdown => term()
+            , fixtures => list()
+            , peer => map()
+            , net => tuple()
+            , subnet => number()
+            })
     ]).
 
 verify_cluster_conf_prop() ->
