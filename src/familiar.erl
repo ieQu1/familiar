@@ -57,8 +57,9 @@
          }.
 
 -type site_conf() ::
-        #{ peer => peer:start_options()
-         , start => boolean()
+        #{ fixtures => [familiar_fixture:t()]
+         , peer     => peer:start_options()
+         , start    => boolean()
          }.
 
 %%================================================================================
