@@ -7,7 +7,7 @@
 -define(familiar_abnormal_exit, familiar_abnormal_exit).
 
 -ifndef(ON).
--define(ON(SITE, BODY), familiar_site:call(SITE, fun() -> BODY end)).
+-define(ON(SITE, BODY), familiar:call(SITE, fun() -> BODY end)).
 -endif.
 
 -endif.

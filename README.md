@@ -1,9 +1,4 @@
 familiar
 =====
 
-An OTP library
-
-Build
------
-
-    $ rebar3 compile
+An application that helps managing clusters of peer nodes.

@@ -11,6 +11,7 @@
         , start_site/1
         , start_site/2
         , which_node/1
+        , is_running/1
         , last_node/1
         , stop_site/1
         , stop_site/2
@@ -24,6 +25,11 @@
         ]).
 
 -export_type([cluster_id/0, site_id/0, site/0, cluster_conf/0, site_conf/0]).
+
+-ifdef(TEST).
+-include_lib("proper/include/proper.hrl").
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 %%================================================================================
 %% Type declarations
@@ -106,6 +112,10 @@ start_site(Site) ->
 -spec start_site(site(), peer:start_options()) -> {ok, node()} | {error, _}.
 start_site(Site, Options) ->
   familiar_site:start(Site, Options).
+
+-spec is_running(site()) -> boolean().
+is_running(Site) ->
+  familiar_site:is_running(Site).
 
 %% @doc Return current node name of the site.
 %% Throws an error if site is not running.
@@ -243,3 +253,29 @@ verify_peer(Conf) ->
     false ->
       {error, {bad_peer_conf, CustomPeerConf}}
   end.
+
+-ifdef(TEST).
+
+verify_conf_test_() ->
+  {timeout, 15_000,
+   ?_assert(proper:quickcheck(verify_cluster_conf_prop()))}.
+
+cluster_conf() ->
+  oneof(
+    [ term()
+    , map()
+    , #{id => term(), fixtures => list(), peer => map(), net => tuple(), subnet => number()}
+    ]).
+
+verify_cluster_conf_prop() ->
+  ?FORALL(T, cluster_conf(),
+          case with_defaults(T) of
+            {ok, #{id := _, fixtures := _, peer := #{}, net := _, subnet := _}}  ->
+              true;
+            {error, _} ->
+              true;
+            Ret ->
+              error({T, '->', Ret})
+          end).
+
+-endif.

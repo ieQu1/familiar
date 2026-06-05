@@ -10,23 +10,18 @@
 %% Tests
 %%================================================================================
 
+-define(timeout, 10_000).
+
 start_stop_test_() ->
-  {timeout, 10_000,
+  {timeout, ?timeout,
    fun() ->
        Cluster = ?FUNCTION_NAME,
-       ?assertEqual(
-          ok,
-          familiar:start_link_cluster(#{ id => Cluster
-                                       , net => {127, 31, 0, 0}
-                                       , subnet => 16
-                                       })),
-       ?assertEqual(
-          ok,
-          familiar:stop_cluster(Cluster, true))
+       ?assertEqual(ok, familiar:start_link_cluster(#{id => Cluster})),
+       ?assertEqual(ok, familiar:stop_cluster(Cluster, true))
    end}.
 
 simple_test_() ->
-  {timeout, 10_000,
+  {timeout, ?timeout,
    fun() ->
        Cluster = ?FUNCTION_NAME,
        ?assertEqual(
@@ -53,6 +48,85 @@ simple_test_() ->
        ?assertEqual(
           ok,
           familiar:stop_cluster(Cluster, true))
+   end}.
+
+is_running_test_() ->
+  {timeout, ?timeout,
+   fun() ->
+       Cluster = ?FUNCTION_NAME,
+       ?assertEqual(ok, familiar:start_link_cluster(#{id => Cluster})),
+       {ok, S1} = familiar:create_site(Cluster, site1),
+       %% Stopped:
+       ?assertNot(familiar:is_running(S1)),
+       %% Started:
+       ?assertMatch({ok, _}, familiar:start_site(S1)),
+       ?assert(familiar:is_running(S1)),
+       %% Stopped again:
+       ?assertEqual(ok, familiar:stop_site(S1)),
+       ?assertNot(familiar:is_running(S1))
+   end}.
+
+which_node_test_() ->
+  {timeout, ?timeout,
+   fun() ->
+       Cluster = ?FUNCTION_NAME,
+       ?assertEqual(
+          ok,
+          familiar:start_link_cluster(#{ id => Cluster
+                                       , net => {127, 31, 0, 0}
+                                       , subnet => 16
+                                       })),
+       {ok, S1} = familiar:create_site(Cluster, site1),
+       %% Stopped, never ran:
+       ?assertError({site_is_not_running, _}, familiar:which_node(S1)),
+       ?assertEqual(undefined, familiar:last_node(S1)),
+       %% Running:
+       {ok, Node1} = familiar:start_site(S1),
+       ?assertEqual(Node1, familiar:which_node(S1)),
+       ?assertEqual({ok, Node1}, familiar:last_node(S1)),
+       %% Stopped again:
+       ?assertEqual(ok, familiar:stop_site(S1)),
+       ?assertError({site_is_not_running, _}, familiar:which_node(S1)),
+       ?assertEqual({ok, Node1}, familiar:last_node(S1)),
+       %% Restarted with a different node name:
+       {ok, Node2} = familiar:start_site(S1, #{name => new_name}),
+       ?assertEqual('new_name@127.31.0.0', Node2),
+       ?assertEqual(Node2, familiar:which_node(S1)),
+       ?assertEqual({ok, Node2}, familiar:last_node(S1)),
+       %% Stopped again:
+       ?assertEqual(ok, familiar:stop_site(S1)),
+       ?assertError({site_is_not_running, _}, familiar:which_node(S1)),
+       ?assertEqual({ok, Node2}, familiar:last_node(S1))
+   end}.
+
+call_test_() ->
+  {timeout, ?timeout,
+   fun() ->
+       Cluster = ?FUNCTION_NAME,
+       ?assertEqual(ok, familiar:start_link_cluster(#{id => Cluster})),
+       {ok, S1, Node} = familiar:create_site(Cluster, site1, #{start => true}),
+       %% Running, normal call:
+       ?assertEqual(Node, familiar:call(S1, fun() -> erlang:node() end)),
+       ?assertEqual(Node, familiar:call(S1, fun() -> erlang:node() end, 1_000)),
+       ?assertEqual(Node, familiar:call(S1, erlang, node, [])),
+       ?assertEqual(Node, familiar:call(S1, erlang, node, [], 1_000)),
+       %% Stopped:
+       ?assertEqual(ok, familiar:stop_site(S1)),
+       ?assertError({site_is_not_running, _}, familiar:call(S1, fun() -> erlang:node() end)),
+       ?assertError({site_is_not_running, _}, familiar:call(S1, fun() -> erlang:node() end, 1_000)),
+       ?assertError({site_is_not_running, _}, familiar:call(S1, erlang, node, [])),
+       ?assertError({site_is_not_running, _}, familiar:call(S1, erlang, node, [], 1_000))
+   end}.
+
+setfail_test_() ->
+  {timeout, ?timeout,
+   fun() ->
+       Cluster = ?FUNCTION_NAME,
+       ?assertEqual(ok, familiar:start_link_cluster(#{id => Cluster})),
+       ?assertNot(familiar_cluster:isfail(Cluster)),
+       {ok, _S1, _Node} = familiar:create_site(Cluster, site1, #{start => true}),
+       ?assertEqual(ok, familiar_cluster:set_fail(Cluster)),
+       ?assert(familiar_cluster:isfail(Cluster))
    end}.
 
 %%================================================================================
