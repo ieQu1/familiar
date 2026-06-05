@@ -10,7 +10,7 @@
 -behavior(familiar_fixture).
 
 %% behavior callbacks:
--export([init_per_cluster/2, init_per_node/4, cleanup_per_node/4]).
+-export([init_per_cluster/3, init_per_node/4, cleanup_per_node/4]).
 
 -export_type([conf/0]).
 
@@ -25,9 +25,9 @@
 %%================================================================================
 
 %% @private
-init_per_cluster(_TC, State = #{workdir := _}) ->
+init_per_cluster(_Cluster, _TC, State = #{workdir := _}) ->
   {ok, State};
-init_per_cluster(_, _State) ->
+init_per_cluster(_Cluster, _, _State) ->
   error(logger_needs_work_dir).
 
 %% @private

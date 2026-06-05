@@ -55,7 +55,7 @@ start_link(Parent, Conf = #{id := ID}) ->
 stop(ID, Success) ->
   case gproc:where(?name(#fam_reg_cluster_sup{cluster = ID})) of
     Pid when is_pid(Pid) ->
-      _ = Success orelse familiar_cluster:set_fail(Pid),
+      _ = Success orelse familiar_cluster:set_fail(ID),
       unlink(Pid),
       familiar_sup:stop_cluster(Pid);
     undefined ->
@@ -69,8 +69,6 @@ create_site(Cluster, Site, Conf) ->
     #call_create_site{site = Site, conf = Conf}).
 
 -spec set_fail(pid() | familiar:cluster_id()) -> ok.
-set_fail(Pid) when is_pid(Pid) ->
-  gen_server:call(Pid, #call_setfail{}, infinity);
 set_fail(Id) ->
   gen_server:call(
     ?via(#fam_reg_cluster_man{cluster = Id}),
