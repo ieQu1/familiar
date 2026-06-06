@@ -211,10 +211,12 @@ default_site_specific_opts(#s{net = Net, subnet = SubNet}, _Site, SiteN, NodeNam
   maybe
     {ok, Address} ?= familiar_lib:get_ip_addr(Net, SubNet, SiteN),
     Host = inet:ntoa(Address),
-    {ok, #{peer =>
-             #{ host => Host
-              , name => NodeName
-              }}}
+    {ok, #{ peer =>
+              #{ host => Host
+               , name => NodeName
+               }
+          , listen_addr => Address
+          }}
   end.
 
 %% @doc Merge cluster configuration.

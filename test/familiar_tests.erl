@@ -103,7 +103,7 @@ which_node_test_() ->
        ?assertError({site_is_not_running, _}, familiar:which_node(S1)),
        ?assertEqual({ok, Node1}, familiar:last_node(S1)),
        %% Restarted with a different node name:
-       {ok, Node2} = familiar:start_site(S1, #{name => new_name}),
+       {ok, Node2} = familiar:start_site(S1, #{peer => #{name => new_name}}),
        ?assertEqual('new_name@127.31.0.0', Node2),
        ?assertEqual(Node2, familiar:which_node(S1)),
        ?assertEqual({ok, Node2}, familiar:last_node(S1)),

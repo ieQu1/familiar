@@ -27,6 +27,8 @@
 -export([ start_link/3
         ]).
 
+-export_type([start_options/0]).
+
 -include_lib("snabbkaffe/include/trace.hrl").
 -include("familiar_internal.hrl").
 
@@ -40,6 +42,11 @@
 -record(call_start, {opts :: map()}).
 -record(call_stop, {}).
 -record(call_last_node, {}).
+
+-type start_options() ::
+        #{ peer        => peer:start_options()
+         , listen_addr => tuple()
+         }.
 
 %%================================================================================
 %% API functions
@@ -91,12 +98,15 @@ start(Site) ->
 %% Resulting node will be named `NodeName@Host'.
 %%
 %% Can return `{error, already_running}'.
--spec start(familiar:site(), peer:start_options()) -> {ok, node()} | {error, _}.
-start({ClusterId, SiteId}, PeerOptions) ->
-  gen_server:call(
-    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
-    #call_start{opts = PeerOptions},
-    infinity).
+-spec start(familiar:site(), start_options()) -> {ok, node()} | {error, _}.
+start({ClusterId, SiteId}, StartOptions) ->
+  maybe
+    ok ?= verify_start_options(StartOptions),
+    gen_server:call(
+      ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+      #call_start{opts = StartOptions},
+      infinity)
+  end.
 
 -spec stop(familiar:site()) -> ok.
 stop({ClusterId, SiteId}) ->
@@ -252,19 +262,27 @@ terminate(_Reason, _) ->
 do_start(CustomOpts, S0) ->
   #s{ cluster = Cluster
     , site = Site
-    , spec = #{ fixtures := Fixtures
-              , peer     := DefaultPeerOpts
+    , spec = #{ fixtures    := Fixtures
+              , peer        := DefaultPeerOpts
+              , listen_addr := DefaultListenAddr
               }
     , fixture_state = FS
     , my_path = MyPath
     } = S0,
+  ListenAddr = lists:flatten(
+                 io_lib:format("~p", [maps:get(listen_addr, CustomOpts, DefaultListenAddr)])),
   #{ args := Args0
-   } = PeerOpts0 = maps:merge(DefaultPeerOpts, CustomOpts),
+   } = PeerOpts0 = maps:merge(DefaultPeerOpts, maps:get(peer, CustomOpts, #{})),
   MandatoryArgs = [ "-pz", MyPath
                   , "-setcookie", atom_to_list(erlang:get_cookie())
+                  , "-kernel", "inet_dist_use_interface", ListenAddr
                   ],
   PeerOpts = PeerOpts0#{args => Args0 ++ MandatoryArgs},
-  ?tp(debug, familiar_test_site_start, #{site => Site, peer => PeerOpts}),
+  ?tp(debug, familiar_peer_start,
+      #{ site => Site
+       , peer => PeerOpts
+       , listen_addr => ListenAddr
+       }),
   {ok, Pid, Node} = peer:start_link(PeerOpts),
   S = S0#s{ pid = Pid
           , node = Node
@@ -294,7 +312,7 @@ do_stop(S) ->
   persistent_term:erase(?call_via(Cluster, Site)),
   unlink(Pid),
   peer:stop(Pid),
-  ?tp(debug, familiar_test_site_stop, #{site => Site}),
+  ?tp(debug, familiar_peer_stop, #{site => Site}),
   {ok, S#s{ pid = undefined
           , node = undefined
           , name = undefined
@@ -307,4 +325,13 @@ call_method({ClusterId, SiteId} = Site) ->
       error({site_is_not_running, Site});
     Other ->
       Other
+  end.
+
+verify_start_options(StartOptions) ->
+  maybe
+    [] ?= maps:keys(StartOptions) -- [peer, listen_addr],
+    ok
+  else
+    UnknownOpts when is_list(UnknownOpts) ->
+      {error, {unknown_options, UnknownOpts}}
   end.
