@@ -67,7 +67,7 @@ merge_site_opts(C1, C2) ->
 merge_site_opts(L) ->
   lists:foldr(fun merge_site_opts/2, #{}, L).
 
--spec merge_peer_opts(peer:start_options(), peer:start_option()) -> peer:start_options().
+-spec merge_peer_opts(peer:start_options(), peer:start_options()) -> peer:start_options().
 merge_peer_opts(C1, C2) ->
   maps:merge_with(
     fun(args, A1, A2) ->

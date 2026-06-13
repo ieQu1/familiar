@@ -71,7 +71,7 @@ stop_cluster(Pid) ->
 -spec start_site(
         pid(),
         familiar:site(),
-        familiar:cluster_conf(),
+        map(),
         familiar_fixture:state()
        ) -> {ok, pid()} | {error, _}.
 start_site(Sup, Site, Conf, FixtureState) ->

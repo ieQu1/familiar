@@ -217,18 +217,6 @@ default_site_specific_opts(#s{net = Net, subnet = SubNet}, _Site, SiteN, NodeNam
           }}
   end.
 
-%% @doc Merge cluster configuration.
--spec merge_conf(familiar:cluster_conf(), familiar:cluster_conf()) -> familiar:cluster_conf().
-merge_conf(C1, C2) ->
-  maps:merge_with(
-    fun(fixtures, A, B) ->
-        A ++ B;
-       (peer, A, B) ->
-        maps:merge(A, B)
-    end,
-    C1,
-    C2).
-
 derive_name(_Site, Spec = #{peer := #{name := Name}}, _SiteN) ->
   case is_atom(Name) of
     true ->
