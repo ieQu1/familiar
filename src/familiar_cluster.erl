@@ -191,9 +191,7 @@ do_create_site(S, SiteId, CustomSiteSpec) ->
           end,
     {ok, NodeName} ?= derive_name(SiteId, CustomSiteSpec, SiteN),
     {ok, DefaultSiteSpec} ?= default_site_specific_opts(S, SiteId, SiteN, NodeName),
-    SiteSpec = lists:foldr(
-                 fun merge_conf/2,
-                 #{},
+    SiteSpec = familiar_lib:merge_site_opts(
                  [ CommonSpec
                  , DefaultSiteSpec
                  , CustomSiteSpec

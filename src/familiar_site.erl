@@ -259,25 +259,29 @@ terminate(_Reason, _) ->
 %% Internal functions
 %%================================================================================
 
-do_start(CustomOpts, S0) ->
+do_start(CustomSpec, S0) ->
   #s{ cluster = Cluster
     , site = Site
-    , spec = #{ fixtures    := Fixtures
-              , peer        := DefaultPeerOpts
-              , listen_addr := DefaultListenAddr
-              }
+    , spec = DefaultSpec = #{listen_addr := DefaultListenAddr}
     , fixture_state = FS
     , my_path = MyPath
     } = S0,
   ListenAddr = lists:flatten(
-                 io_lib:format("~p", [maps:get(listen_addr, CustomOpts, DefaultListenAddr)])),
-  #{ args := Args0
-   } = PeerOpts0 = maps:merge(DefaultPeerOpts, maps:get(peer, CustomOpts, #{})),
-  MandatoryArgs = [ "-pz", MyPath
-                  , "-setcookie", atom_to_list(erlang:get_cookie())
-                  , "-kernel", "inet_dist_use_interface", ListenAddr
-                  ],
-  PeerOpts = PeerOpts0#{args => Args0 ++ MandatoryArgs},
+                 io_lib:format("~p", [maps:get(listen_addr, CustomSpec, DefaultListenAddr)])),
+  DynamicPeerConf = #{peer =>
+                        #{args =>
+                            [ "-pz", MyPath
+                            , "-setcookie", atom_to_list(erlang:get_cookie())
+                            , "-kernel", "inet_dist_use_interface", ListenAddr
+                            ]}},
+  Spec = familiar_lib:merge_site_opts(
+           [ DefaultSpec
+           , CustomSpec
+           , DynamicPeerConf
+           ]),
+  #{ fixtures := Fixtures
+   , peer     := PeerOpts
+   } = Spec,
   ?tp(debug, familiar_peer_start,
       #{ site => Site
        , peer => PeerOpts

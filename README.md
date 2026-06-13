@@ -1,4 +1,4 @@
 familiar
 =====
 
-An application that helps managing clusters of peer nodes.
+An application that manages and supervises clusters of peer nodes.

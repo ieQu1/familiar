@@ -4,7 +4,13 @@
 -module(familiar_lib).
 
 %% API:
--export([is_normal_exit/1, ensure_list/1, get_ip_addr/3]).
+-export([ is_normal_exit/1
+        , ensure_list/1
+        , get_ip_addr/3
+        , merge_site_opts/2
+        , merge_peer_opts/2
+        , merge_site_opts/1
+        ]).
 
 -export_type([]).
 
@@ -43,6 +49,34 @@ get_ip_addr({NA, NB, NC, ND}, SubNet, SiteN) ->
     true ->
       {error, subnet_is_too_small}
   end.
+
+-spec merge_site_opts(familiar:site_conf(), familiar:site_conf()) -> familiar:site_conf().
+merge_site_opts(C1, C2) ->
+  maps:merge_with(
+    fun(fixtures, F1, F2) ->
+        F1 ++ F2;
+       (peer, P1, P2) ->
+        merge_peer_opts(P1, P2);
+       (_, _, V2) ->
+        V2
+    end,
+    C1,
+    C2).
+
+-spec merge_site_opts([familiar:site_conf()]) -> familiar:site_conf().
+merge_site_opts(L) ->
+  lists:foldr(fun merge_site_opts/2, #{}, L).
+
+-spec merge_peer_opts(peer:start_options(), peer:start_option()) -> peer:start_options().
+merge_peer_opts(C1, C2) ->
+  maps:merge_with(
+    fun(args, A1, A2) ->
+        A1 ++ A2;
+       (_, _, V2) ->
+        V2
+    end,
+    C1,
+    C2).
 
 %%================================================================================
 %% Internal exports

@@ -271,8 +271,11 @@ verify_id(#{id := Id}) when Id =/= undefined ->
 verify_id(_) ->
   {error, bad_cluster_id}.
 
+default_net() ->
+  {127, 22, 0, 0}.
+
 verify_net(Conf) ->
-  Net = maps:get(net, Conf, {127, 22, 0, 0}),
+  Net = maps:get(net, Conf, default_net()),
   SubNet = maps:get(subnet, Conf, 24),
   case inet:ntoa(Net) of
     {error, einval} ->
@@ -298,12 +301,15 @@ verify_fixtures(#{fixtures := L}) ->
 verify_fixtures(#{}) ->
   {ok, familiar_fixture:defaults()}.
 
+default_peer_opts() ->
+  #{ longnames => true
+   , peer_down => stop
+   , shutdown => 4_000
+   , args => ["+S", "1:1"]
+   }.
+
 verify_peer(Conf) ->
-  DefaultPeerConf = #{ longnames => true
-                     , peer_down => stop
-                     , shutdown => 4_000
-                     , args => ["+S", "1:1"]
-                     },
+  DefaultPeerConf = default_peer_opts(),
   CustomPeerConf = maps:get(peer, Conf, #{}),
   case is_map(CustomPeerConf) of
     true ->
@@ -313,6 +319,35 @@ verify_peer(Conf) ->
   end.
 
 -ifdef(TEST).
+
+with_defaults_test_() ->
+  Conf0 = #{id => id1},
+  Conf1 = #{ id => id2
+           , peer =>
+               #{ args => ["-kernel", "prevent_overlapping_partitions", "false"]
+                }},
+  [ ?_assertEqual(
+       {ok, #{ id => id1
+             , net => default_net()
+             , peer => default_peer_opts()
+             , auto_shutdown => true
+             , fixtures => familiar_fixture:defaults()
+             , subnet => 24
+             }},
+       with_defaults(Conf0))
+  , ?_assertMatch(
+       {ok, #{ id := id2
+             , peer :=
+                 #{ args := ["-kernel", "prevent_overlapping_partitions", "false"]
+                  , longnames := true
+                  , peer_down := stop
+                  , shutdown := _
+                  }
+             , fixtures := _
+             , subnet := _
+             }},
+       with_defaults(Conf1))
+  ].
 
 verify_conf_test_() ->
   {timeout, 15_000,
