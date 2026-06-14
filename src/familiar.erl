@@ -10,6 +10,7 @@
         , create_site/2
         , start_site/1
         , start_site/2
+        , kill_site/1
         , which_node/1
         , is_running/1
         , last_node/1
@@ -93,7 +94,7 @@ create_site(Cluster, SiteId, SiteConf0) ->
         false ->
           {ok, Site};
         true ->
-          case start_site(Site, maps:get(peer, SiteConf, #{})) of
+          case start_site(Site, maps:with([peer, listen_addr], SiteConf)) of
             {ok, Node} ->
               {ok, Site, Node};
             {error, _} = Err ->
@@ -108,7 +109,7 @@ create_site(Cluster, SiteId, SiteConf0) ->
 start_site(Site) ->
   familiar_site:start(Site).
 
--spec start_site(site(), peer:start_options()) -> {ok, node()} | {error, _}.
+-spec start_site(site(), familiar_site:start_options()) -> {ok, node()} | {error, _}.
 start_site(Site, Options) ->
   familiar_site:start(Site, Options).
 
@@ -134,6 +135,11 @@ last_node(Site) ->
 -spec stop_site(site()) -> ok.
 stop_site(Site) ->
   familiar_site:stop(Site).
+
+%% @doc Abruptly stop the site's node (clean-up actions don't run)
+-spec kill_site(site()) -> ok.
+kill_site(Site) ->
+  familiar_site:kill(Site).
 
 -spec stop_site(cluster_id(), site_id()) -> ok.
 stop_site(Cluster, Site) ->

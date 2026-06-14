@@ -13,6 +13,7 @@
         , start/1
         , start/2
         , stop/1
+        , kill/1
 
         , call/2
         , call/3
@@ -40,7 +41,7 @@
 
 -record(call_is_running, {}).
 -record(call_start, {opts :: map()}).
--record(call_stop, {}).
+-record(call_stop, {cleanup = true :: boolean()}).
 -record(call_last_node, {}).
 
 -type start_options() ::
@@ -113,6 +114,13 @@ stop({ClusterId, SiteId}) ->
   gen_server:call(
     ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
     #call_stop{},
+    infinity).
+
+-spec kill(familiar:site()) -> ok.
+kill({ClusterId, SiteId}) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_stop{cleanup = false},
     infinity).
 
 %% @doc Execute MFA on the site.
@@ -191,12 +199,12 @@ handle_call(#call_start{opts = StartOpts}, _From, S0 = #s{pid = Pid}) ->
     _ when is_pid(Pid) ->
       {reply, {error, already_started}, S0}
   end;
-handle_call(#call_stop{}, _From, S0 = #s{pid = Pid}) ->
+handle_call(#call_stop{cleanup = WithCleanup}, _From, S0 = #s{pid = Pid}) ->
   case Pid of
     undefined ->
       {reply, ok, S0};
     _ when is_pid(Pid) ->
-      {ok, S} = do_stop(S0),
+      {ok, S} = do_stop(WithCleanup, S0),
       {reply, ok, S}
   end;
 handle_call(#call_is_running{}, _From, S = #s{pid = Pid}) ->
@@ -244,7 +252,7 @@ terminate(Reason, S0 = #s{cluster = Cluster, site = Site, spec = Spec, fixture_s
         #{ server => ?MODULE
          , reason => Reason
          }),
-  _ = do_stop(S0),
+  _ = do_stop(true, S0),
   #{fixtures := Fixtures} = Spec,
   familiar_fixture:cleanup_per_site(Fixtures, {Cluster, Site}, Success, FS),
   ?tp(familiar_test_site_destroyed, #{site => Site});
@@ -297,13 +305,13 @@ do_start(CustomSpec, S0) ->
     {ok, NFS} ->
       {ok, Node, S#s{node_fixture_state = NFS}};
     {error, _} = Err ->
-      {ok, _} = do_stop(S),
+      {ok, _} = do_stop(true, S),
       Err
   end.
 
-do_stop(S = #s{pid = undefined}) ->
+do_stop(_, S = #s{pid = undefined}) ->
   {ok, S};
-do_stop(S) ->
+do_stop(WithCleanup, S) ->
   #s{ spec = #{id := Cluster, fixtures := Fixtures}
     , cluster = Cluster
     , site = Site
@@ -311,7 +319,7 @@ do_stop(S) ->
     , node = Node
     , node_fixture_state = NFS
     } = S,
-  is_map(NFS) andalso
+  is_map(NFS) andalso WithCleanup andalso
     familiar_fixture:cleanup_per_node(Fixtures, {Cluster, Site}, Node, NFS),
   persistent_term:erase(?call_via(Cluster, Site)),
   unlink(Pid),

@@ -30,6 +30,7 @@
 -type conf() :: #{ app := atom()
                  , env => map()
                  , start => boolean()
+                 , timeout => timeout()
                  }.
 
 %%================================================================================
@@ -57,7 +58,8 @@ init_per_node(Site, _Node, Conf, State) ->
                    application:set_env(App, K, V)
                end,
                Env)
-         end),
+         end,
+         timeout(Conf)),
   case Start of
     true ->
       {ok, Started} = familiar_site:call(Site, application, ensure_all_started, [App]);
@@ -67,7 +69,7 @@ init_per_node(Site, _Node, Conf, State) ->
   {ok, State#{{?MODULE, App} => Started}}.
 
 %% @private
-cleanup_per_node(Site, _Node, #{app := App}, State) ->
+cleanup_per_node(Site, _Node, #{app := App} = Conf, State) ->
   #{{?MODULE, App} := Started} = State,
   familiar_site:call(
     Site,
@@ -75,4 +77,11 @@ cleanup_per_node(Site, _Node, #{app := App}, State) ->
         lists:foreach(
           fun application:stop/1,
           lists:reverse(Started))
-    end).
+    end,
+    timeout(Conf)).
+
+timeout(#{timeout := TO}) ->
+  TO;
+timeout(_) ->
+  %% Make it larger than the default 5_000
+  15_000.
