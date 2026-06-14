@@ -28,6 +28,9 @@
 -define(name(NAME), {n, l, NAME}).
 -define(via(NAME), {via, gproc, ?name(NAME)}).
 
+-ifndef(SNK_COLLECTOR).
+  -define(SNK_COLLECTOR, true).
+-endif.
 -include_lib("snabbkaffe/include/trace.hrl").
 -include("familiar.hrl").
 

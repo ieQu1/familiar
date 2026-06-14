@@ -30,7 +30,6 @@
 
 -export_type([start_options/0]).
 
--include_lib("snabbkaffe/include/trace.hrl").
 -include("familiar_internal.hrl").
 
 %%================================================================================
