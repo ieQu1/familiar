@@ -100,13 +100,10 @@ start(Site) ->
 %% Can return `{error, already_running}'.
 -spec start(familiar:site(), start_options()) -> {ok, node()} | {error, _}.
 start({ClusterId, SiteId}, StartOptions) ->
-  maybe
-    ok ?= verify_start_options(StartOptions),
-    gen_server:call(
-      ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
-      #call_start{opts = StartOptions},
-      infinity)
-  end.
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_start{opts = StartOptions},
+    infinity).
 
 -spec stop(familiar:site()) -> ok.
 stop({ClusterId, SiteId}) ->
@@ -336,13 +333,4 @@ call_method({ClusterId, SiteId} = Site) ->
       error({site_is_not_running, Site});
     Other ->
       Other
-  end.
-
-verify_start_options(StartOptions) ->
-  maybe
-    [] ?= maps:keys(StartOptions) -- [peer, listen_addr],
-    ok
-  else
-    UnknownOpts when is_list(UnknownOpts) ->
-      {error, {unknown_options, UnknownOpts}}
   end.
