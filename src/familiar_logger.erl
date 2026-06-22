@@ -25,16 +25,25 @@
 %%================================================================================
 
 %% @private
-init_per_cluster(_Cluster, _TC, State = #{workdir := _}) ->
-  {ok, State};
-init_per_cluster(_Cluster, _, _State) ->
+init_per_cluster(_Cluster, Conf, State = #{workdir := _}) ->
+  LogLevel = case os:getenv("FAMILIAR_LOG_LEVEL", "info") of
+               "debug"    -> debug;
+               "info"     -> info;
+               "notice"   -> notice;
+               "warning"  -> warning;
+               "error"    -> error;
+               "critical" -> critical;
+               "alert"    -> alert;
+               _          -> maps:get(level, Conf, debug)
+             end,
+  {ok, State#{log_level => LogLevel}};
+init_per_cluster(_Cluster, _Conf, _State) ->
   error(logger_needs_work_dir).
 
 %% @private
 init_per_node(Site, _Node, Conf, State) ->
-  #{workdir := _WorkDir} = State,
+  #{workdir := _WorkDir, log_level => Level} = State,
   LogFile = "erlang.log",
-  Level = maps:get(level, Conf, debug),
   HandlerConf = #{ level => Level
                  , filter_default => log
                  , config => #{ type => file
