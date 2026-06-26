@@ -42,7 +42,7 @@ init_per_cluster(_Cluster, _Conf, _State) ->
 
 %% @private
 init_per_node(Site, _Node, Conf, State) ->
-  #{workdir := _WorkDir, log_level => Level} = State,
+  #{workdir := _WorkDir, log_level := Level} = State,
   LogFile = "erlang.log",
   HandlerConf = #{ level => Level
                  , filter_default => log

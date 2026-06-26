@@ -28,7 +28,7 @@
 %%================================================================================
 
 -type conf() :: #{ app := atom()
-                 , env => map()
+                 , env => map() | fun((node(), _State) -> map())
                  , start => boolean()
                  , timeout => timeout()
                  }.
@@ -38,14 +38,19 @@
 %%================================================================================
 
 %% @private
-init_per_node(Site, _Node, Conf, State) ->
+init_per_node(Site, Node, Conf, State) ->
   Defaults = #{ env   => #{}
               , start => true
               },
   #{ app   := App
-   , env   := Env
+   , env   := Env0
    , start := Start
    } = maps:merge(Defaults, Conf),
+  Env = if is_map(Env0) ->
+            Env0;
+           is_function(Env0, 3) ->
+            Env0(Site, Node, State)
+        end,
   ok = familiar_site:call(
          Site,
          fun() ->

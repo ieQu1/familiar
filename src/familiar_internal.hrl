@@ -19,7 +19,7 @@
 -record(fam_reg_cluster_sup, {cluster :: familiar:cluster_id()}).
 -record(fam_reg_cluster_sites_sup, {cluster :: familiar:cluster_id()}).
 -record(fam_reg_cluster_man, {cluster :: familiar:cluster_id()}).
--record(fam_reg_site, {cluster :: familiar:cluster_id(), site :: familiar:site()}).
+-record(fam_reg_site, {cluster :: familiar:cluster_id(), site :: familiar:site_id()}).
 
 -define(familiar_unknown_event, familiar_unknown_event).
 -define(familiar_cluster_terminate, familiar_cluster_terminate).
