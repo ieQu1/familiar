@@ -128,7 +128,7 @@ init(sites) ->
   Children = #{ id       => peer
               , type     => worker
               , start    => {familiar_site, start_link, []}
-              , shutdown => 15_000
+              , shutdown => infinity
               , restart  => transient
               },
   {ok, {SupFlags, [Children]}}.
