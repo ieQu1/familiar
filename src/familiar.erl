@@ -310,7 +310,7 @@ verify_fixtures(#{}) ->
 default_peer_opts() ->
   #{ longnames => true
    , peer_down => stop
-   , shutdown => 4_000
+   , shutdown => {halt, 4_000}
    , args => ["+S", "1:1"]
    }.
 

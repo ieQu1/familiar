@@ -65,4 +65,5 @@ init_per_node(Site, _Node, Conf, State) ->
 cleanup_per_node(Site, _Node, _Conf, #{log_file := LogFile}) ->
   familiar_site:call(
     Site,
-    logger_std_h, filesync, [LogFile]).
+    logger_std_h, filesync, [LogFile]),
+  timer:sleep(1000).
