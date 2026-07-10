@@ -23,14 +23,17 @@
 
 -export_type([conf/0]).
 
+-include_lib("kernel/include/logger.hrl").
+
 %%================================================================================
 %% Type declarations
 %%================================================================================
 
--type conf() :: #{ app := atom()
-                 , env => map() | fun((node(), _State) -> map())
-                 , start => boolean()
-                 , timeout => timeout()
+-type conf() :: #{ app       := atom()
+                 , env       => map() | fun((famliar:site(), node(), _State) -> map())
+                 , start     => boolean()
+                 , timeout   => timeout()
+                 , prep_stop => fun((famliar:site(), node(), _State) -> _)
                  }.
 
 %%================================================================================
@@ -74,13 +77,28 @@ init_per_node(Site, Node, Conf, State) ->
   {ok, State#{{?MODULE, App} => Started}}.
 
 %% @private
-cleanup_per_node(Site, _Node, #{app := App} = Conf, State) ->
+cleanup_per_node(Site, Node, #{app := App} = Conf, State) ->
   #{{?MODULE, App} := Started} = State,
+  case Conf of
+    #{prep_stop := Fun} ->
+      try
+        Fun(Site, Node, State)
+      catch
+        EC:Err:Stack ->
+          ?LOG_ERROR("prep_stop callback for application ~p failed: ~p:~p~nStack: ~p", [App, EC, Err, Stack])
+      end;
+    #{} ->
+      ok
+  end,
   familiar_site:call(
     Site,
     fun() ->
         lists:foreach(
-          fun application:stop/1,
+          fun(App) ->
+              ?LOG_DEBUG("Stopping ~p at ~p", [App, Node]),
+              application:stop(App),
+              ?LOG_DEBUG("Stopped ~p at ~p", [App, Node])
+          end,
           lists:reverse(Started))
     end,
     timeout(Conf)).
