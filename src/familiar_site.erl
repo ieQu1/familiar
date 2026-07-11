@@ -248,7 +248,7 @@ terminate(Reason, S0 = #s{cluster = Cluster, site = Site, spec = Spec, fixture_s
         #{ server => ?MODULE
          , reason => Reason
          }),
-  _ = do_stop(true, S0),
+  _ = do_stop(false, S0),
   #{fixtures := Fixtures} = Spec,
   familiar_fixture:cleanup_per_site(Fixtures, {Cluster, Site}, Success, FS),
   ?tp(familiar_test_site_destroyed, #{site => Site});
