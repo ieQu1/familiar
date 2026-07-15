@@ -19,7 +19,7 @@
 -behavior(familiar_fixture).
 
 %% behavior callbacks:
--export([init_per_node/4, cleanup_per_node/4]).
+-export([init_per_node/4, cleanup_per_node/5]).
 
 -export_type([conf/0]).
 
@@ -77,7 +77,7 @@ init_per_node(Site, Node, Conf, State) ->
   {ok, State#{{?MODULE, App} => Started}}.
 
 %% @private
-cleanup_per_node(Site, Node, #{app := App} = Conf, State) ->
+cleanup_per_node(Site, Node, #{app := App} = Conf, State, false) ->
   #{{?MODULE, App} := Started} = State,
   case Conf of
     #{prep_stop := Fun} ->
@@ -101,7 +101,9 @@ cleanup_per_node(Site, Node, #{app := App} = Conf, State) ->
           end,
           lists:reverse(Started))
     end,
-    timeout(Conf)).
+    timeout(Conf));
+cleanup_per_node(_, _, _, _, true) ->
+  ok.
 
 timeout(#{timeout := TO}) ->
   TO;

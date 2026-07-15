@@ -32,7 +32,7 @@
         , cleanup_per_site/4
 
         , init_per_node/4
-        , cleanup_per_node/4
+        , cleanup_per_node/5
 
         , defaults/0
         ]).
@@ -59,14 +59,18 @@
 
 -callback init_per_node(familiar:site(), node(), conf(), state()) -> {ok, state()} | {error, _}.
 
--callback cleanup_per_node(familiar:site(), node(), conf(), state()) -> ok | {error, _}.
+-doc """
+IsKill = abrupt stop, normal clean up procedures should be ignored.
+""".
+-callback cleanup_per_node(familiar:site(), node(), conf(), state(), IsKill) -> ok | {error, _}
+  when IsKill :: boolean().
 
 -optional_callbacks([ init_per_cluster/3
                     , cleanup_per_cluster/4
                     , init_per_site/3
                     , cleanup_per_site/4
                     , init_per_node/4
-                    , cleanup_per_node/4
+                    , cleanup_per_node/5
                     ]).
 
 %%================================================================================
@@ -133,15 +137,15 @@ init_per_node(Fixtures, Site, Node, State0) ->
     {ok, _} ->
       Ret;
     {error, OkFixtures, State, Reason} ->
-      cleanup_per_node(OkFixtures, Site, Node, State),
+      cleanup_per_node(OkFixtures, Site, Node, State, true),
       {error, Reason}
   end.
 
--spec cleanup_per_node([t()], familiar:site(), node(), state()) -> ok | {error, _}.
-cleanup_per_node(Fixtures, Site, Node, State) ->
+-spec cleanup_per_node([t()], familiar:site(), node(), state(), boolean()) -> ok | {error, _}.
+cleanup_per_node(Fixtures, Site, Node, State, IsKill) ->
   lists:foreach(
     fun({Module, Conf}) ->
-        safe_cleanup_call(Module, cleanup_per_node, [Site, Node, Conf, State])
+        safe_cleanup_call(Module, cleanup_per_node, [Site, Node, Conf, State, IsKill])
     end,
     lists:reverse(Fixtures)).
 

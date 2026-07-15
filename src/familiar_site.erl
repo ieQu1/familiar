@@ -315,8 +315,8 @@ do_stop(WithCleanup, S) ->
     , node = Node
     , node_fixture_state = NFS
     } = S,
-  is_map(NFS) andalso WithCleanup andalso
-    familiar_fixture:cleanup_per_node(Fixtures, {Cluster, Site}, Node, NFS),
+  is_map(NFS) andalso
+    familiar_fixture:cleanup_per_node(Fixtures, {Cluster, Site}, Node, NFS, not WithCleanup),
   persistent_term:erase(?call_via(Cluster, Site)),
   unlink(Pid),
   peer:stop(Pid),
