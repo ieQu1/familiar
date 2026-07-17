@@ -10,7 +10,7 @@
 -behavior(familiar_fixture).
 
 %% behavior callbacks:
--export([init_per_node/4, cleanup_per_node/4]).
+-export([init_per_node/4, cleanup_per_node/5]).
 
 -export_type([conf/0]).
 
@@ -30,5 +30,5 @@ init_per_node(_Site, Node, _Conf, State) ->
   {ok, State}.
 
 %% @private
-cleanup_per_node(_Site, Node, _Conf, _State) ->
+cleanup_per_node(_Site, Node, _Conf, _State, _IsKill) ->
   cover:stop([Node]).
