@@ -14,6 +14,8 @@
 
 -export_type([conf/0]).
 
+-include("familiar.hrl").
+
 %%================================================================================
 %% Type declarations
 %%================================================================================
@@ -38,24 +40,26 @@ init_per_cluster(_Cluster, _Conf, _State) ->
 init_per_node(Site, _Node, Conf, State) ->
   #{workdir := _WorkDir, log_level := Level} = State,
   LogFile = "erlang.log",
-  ok = familiar_site:call(
-         Site,
-         logger, update_primary_config, [primary_config(Level, Conf)]),
-  ok = familiar_site:call(
-         Site,
-         logger, add_handler, [?MODULE, logger_std_h, handler_config(Level, LogFile, Conf)]),
-  {ok, State#{log_file => LogFile}}.
+  Handler = ?MODULE,
+  ?ON(Site,
+      begin
+        ok = logger:set_primary_config(primary_config(Level, Conf)),
+        ok = logger:add_handler(Handler, logger_std_h, handler_config(LogFile, Conf))
+      end),
+  {ok, State#{log_file => LogFile, log_handler => Handler}}.
 
 %% @private
-cleanup_per_node(Site, _Node, _Conf, #{log_file := LogFile}, _IsKill) ->
-  familiar_site:call(
-    Site,
-    logger_std_h, filesync, [LogFile]).
+cleanup_per_node(Site, _Node, _Conf, #{log_handler := Handler}, _IsKill) ->
+  ?ON(Site,
+      begin
+        ok = logger_std_h:filesync(Handler)
+      end).
 
 primary_config(Level, Conf) ->
   Default =
-    #{ level   => Level
-     , filters => default_filters()
+    #{ level          => Level
+     , filter_default => log
+     , filters        => default_filters(Level)
      },
   case Conf of
     #{primary_config := Custom} ->
@@ -64,20 +68,13 @@ primary_config(Level, Conf) ->
       Default
   end.
 
-default_filters() ->
-  ProgressArgs = case os:getenv("FAMILIAR_LOG_PROGRESS") of
-                   false -> stop;
-                   _     -> log
-                 end,
-  [ {progress, {fun logger_filters:progress/2, ProgressArgs}}
-  ].
-
-handler_config(Level, LogFile, Conf) ->
+handler_config(LogFile, Conf) ->
   Default =
-    #{ level => Level
-     , filter_default => log
+    #{ filter_default => log
+     , level => all
      , config => #{ type => file
                   , file => LogFile
+                  , filesync_repeat_interval => 100
                   }
      , formatter => {logger_formatter, #{ single_line => false
                                         , legacy_header => true
@@ -89,6 +86,15 @@ handler_config(Level, LogFile, Conf) ->
     #{} ->
       Default
   end.
+
+default_filters(_Level) ->
+  ProgressArgs = case os:getenv("FAMILIAR_LOG_PROGRESS") of
+                   false -> stop;
+                   _     -> log
+                 end,
+
+  [ {progress, {fun logger_filters:progress/2, ProgressArgs}}
+  ].
 
 level(Conf) ->
   case os:getenv("FAMILIAR_LOG_LEVEL", "info") of
