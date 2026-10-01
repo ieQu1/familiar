@@ -94,9 +94,9 @@ cleanup_per_node(Site, Node, #{app := App} = Conf, State, false) ->
     Site,
     fun() ->
         lists:foreach(
-          fun(App) ->
+          fun(I) ->
               ?LOG_DEBUG("Stopping ~p at ~p", [App, Node]),
-              application:stop(App),
+              application:stop(I),
               ?LOG_DEBUG("Stopped ~p at ~p", [App, Node])
           end,
           lists:reverse(Started))
