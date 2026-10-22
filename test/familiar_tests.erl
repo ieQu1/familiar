@@ -43,6 +43,7 @@ simple_test_() ->
           familiar:start_link_cluster(#{ id => Cluster
                                        , net => {127, 31, 0, 0}
                                        , subnet => 16
+                                       , fixture_init_state => #{foo => bar}
                                        })),
        {ok, S1} = familiar:create_site(Cluster, site1),
        ?assertEqual(
@@ -51,6 +52,12 @@ simple_test_() ->
        ?assertEqual(
           'site1@127.31.0.0',
           familiar_site:call(S1, erlang, node, [])),
+       ?assertMatch(
+          #{foo := bar},
+          familiar:fixture_state(S1)),
+       ?assertMatch(
+          #{foo := bar},
+          familiar:call(S1, familiar, fixture_state, [])),
        ?assertEqual(
           'site1@127.31.0.0',
           ?ON(S1, erlang:node())),

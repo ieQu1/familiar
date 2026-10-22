@@ -39,6 +39,8 @@
 
 -export_type([t/0, conf/0, state/0]).
 
+-include("familiar_internal.hrl").
+
 %%================================================================================
 %% Type declarations
 %%================================================================================
@@ -134,7 +136,8 @@ init_per_node(Fixtures, Site, Node, State0) ->
           State0,
           Fixtures),
   case Ret of
-    {ok, _} ->
+    {ok, FinalState} ->
+      familiar_site:call(Site, persistent_term, put, [?familiar_fixture_state, FinalState]),
       Ret;
     {error, OkFixtures, State, Reason} ->
       cleanup_per_node(OkFixtures, Site, Node, State, true),

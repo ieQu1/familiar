@@ -19,6 +19,9 @@
         , ensure_distr/1
         , default_fixtures/0
 
+        , fixture_state/1
+        , fixture_state/0
+
         , call/2
         , call/3
         , call/4
@@ -146,6 +149,14 @@ kill_site(Site) ->
 stop_site(Cluster, Site) ->
   familiar_site:stop({Cluster, Site}).
 
+-spec fixture_state(site()) -> familiar_fixture:state().
+fixture_state(Site) ->
+  familiar_site:get_fixture_state(Site).
+
+-spec fixture_state() -> familiar_fixture:state().
+fixture_state() ->
+  persistent_term:get(?familiar_fixture_state).
+
 -spec ensure_distr(#{name => atom(), _ => _}) -> ok.
 ensure_distr(Opts0) ->
   case maps:take(name, Opts0) of
@@ -175,17 +186,17 @@ call(Site, Fun) when is_function(Fun, 0) ->
 
 %% @doc Execute `Fun' on the site.
 %% Site must be running.
--spec call(familiar:site(), fun(() -> Ret), timeout()) -> Ret.
+-spec call(site(), fun(() -> Ret), timeout()) -> Ret.
 call(Site, Fun, Timeout) when is_function(Fun, 0) ->
   familiar_site:call(Site, Fun, Timeout).
 
 %% @doc Execute Module:Function(Args) on Site.
--spec call(familiar:site() | node(), module(), atom(), list()) -> _.
+-spec call(site() | node(), module(), atom(), list()) -> _.
 call(Site, Module, Function, Args) when is_atom(Module), is_atom(Function), is_list(Args) ->
   familiar_site:call(Site, Module, Function, Args).
 
 %% @doc Execute Module:Function(Args) on Site with Timeout.
--spec call(familiar:site() | node(), module(), atom(), list(), timeout()) -> _.
+-spec call(site() | node(), module(), atom(), list(), timeout()) -> _.
 call(Site, Module, Function, Args, Timeout) when is_atom(Module), is_atom(Function), is_list(Args) ->
   familiar_site:call(Site, Module, Function, Args, Timeout).
 

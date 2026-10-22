@@ -25,6 +25,9 @@
 -define(familiar_cluster_terminate, familiar_cluster_terminate).
 -define(familiar_site_terminate, familiar_site_terminate).
 
+%% Persistent term key:
+-define(familiar_fixture_state, familiar_fixture_state).
+
 -define(name(NAME), {n, l, NAME}).
 -define(via(NAME), {via, gproc, ?name(NAME)}).
 
