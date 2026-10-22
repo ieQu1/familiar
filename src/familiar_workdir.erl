@@ -40,7 +40,7 @@
 %%================================================================================
 
 -type conf() ::
-        #{
+        #{ root => file:filename()
          }.
 
 %%================================================================================
@@ -52,11 +52,17 @@
 %%================================================================================
 
 %% @private
-init_per_cluster(ClusterId, _Conf, State) ->
+init_per_cluster(ClusterId, Conf, State) ->
   Suffix = ClusterId,
   Timestamp = integer_to_binary(os:system_time(second)),
-  {ok, CWD} = file:get_cwd(),
-  WD = filename:join([CWD, ?MODULE, Suffix, Timestamp]),
+  case Conf of
+    #{root := Root} ->
+      ok;
+    _ ->
+      {ok, CWD} = file:get_cwd(),
+      Root = filename:join(CWD, ?MODULE)
+  end,
+  WD = filename:join([Root, Suffix, Timestamp]),
   ok = filelib:ensure_path(WD),
   {ok, State#{workdir => WD}}.
 

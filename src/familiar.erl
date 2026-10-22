@@ -19,6 +19,9 @@
         , ensure_distr/1
         , default_fixtures/0
 
+        , fixture_state/1
+        , fixture_state/0
+
         , call/2
         , call/3
         , call/4
@@ -49,12 +52,13 @@
 -type site() :: {cluster_id(), site_id()}.
 
 -type cluster_conf() ::
-        #{ id       := cluster_id()
-         , fixtures => [familiar_fixture:t()]
-         , peer     => peer:start_options()
-         , net      => {byte(), byte(), byte(), byte()}
-         , subnet   => 0..32
-         , _        => _
+        #{ id                 := cluster_id()
+         , fixtures           => [familiar_fixture:t()]
+         , peer               => peer:start_options()
+         , net                => {byte(), byte(), byte(), byte()}
+         , subnet             => 0..32
+         , fixture_init_state => map()
+         , _                  => _
          }.
 
 -type site_conf() ::
@@ -145,6 +149,14 @@ kill_site(Site) ->
 stop_site(Cluster, Site) ->
   familiar_site:stop({Cluster, Site}).
 
+-spec fixture_state(site()) -> familiar_fixture:state().
+fixture_state(Site) ->
+  familiar_site:get_fixture_state(Site).
+
+-spec fixture_state() -> familiar_fixture:state().
+fixture_state() ->
+  persistent_term:get(?familiar_fixture_state).
+
 -spec ensure_distr(#{name => atom(), _ => _}) -> ok.
 ensure_distr(Opts0) ->
   case maps:take(name, Opts0) of
@@ -174,17 +186,17 @@ call(Site, Fun) when is_function(Fun, 0) ->
 
 %% @doc Execute `Fun' on the site.
 %% Site must be running.
--spec call(familiar:site(), fun(() -> Ret), timeout()) -> Ret.
+-spec call(site(), fun(() -> Ret), timeout()) -> Ret.
 call(Site, Fun, Timeout) when is_function(Fun, 0) ->
   familiar_site:call(Site, Fun, Timeout).
 
 %% @doc Execute Module:Function(Args) on Site.
--spec call(familiar:site() | node(), module(), atom(), list()) -> _.
+-spec call(site() | node(), module(), atom(), list()) -> _.
 call(Site, Module, Function, Args) when is_atom(Module), is_atom(Function), is_list(Args) ->
   familiar_site:call(Site, Module, Function, Args).
 
 %% @doc Execute Module:Function(Args) on Site with Timeout.
--spec call(familiar:site() | node(), module(), atom(), list(), timeout()) -> _.
+-spec call(site() | node(), module(), atom(), list(), timeout()) -> _.
 call(Site, Module, Function, Args, Timeout) when is_atom(Module), is_atom(Function), is_list(Args) ->
   familiar_site:call(Site, Module, Function, Args, Timeout).
 
@@ -247,17 +259,19 @@ ensure_epmd() ->
 with_defaults(Conf) when is_map(Conf) ->
   maybe
     {ok, AutoShutdown} ?= verify_auto_shutdown(Conf),
-    {ok, Id} ?= verify_id(Conf),
-    {ok, Fixtures} ?= verify_fixtures(Conf),
-    {ok, Net, SubNet} ?= verify_net(Conf),
-    {ok, Peer} ?= verify_peer(Conf),
+    {ok, Id}           ?= verify_id(Conf),
+    {ok, Fixtures}     ?= verify_fixtures(Conf),
+    {ok, Net, SubNet}  ?= verify_net(Conf),
+    {ok, Peer}         ?= verify_peer(Conf),
+    {ok, InitState}    ?= verify_fixture_init_state(Conf),
     {ok,
-     #{ id            => Id
-      , auto_shutdown => AutoShutdown
-      , fixtures      => Fixtures
-      , peer          => Peer
-      , net           => Net
-      , subnet        => SubNet
+     #{ id                 => Id
+      , auto_shutdown      => AutoShutdown
+      , fixtures           => Fixtures
+      , peer               => Peer
+      , net                => Net
+      , subnet             => SubNet
+      , fixture_init_state => InitState
       }}
   end;
 with_defaults(_Conf) ->
@@ -324,6 +338,13 @@ verify_peer(Conf) ->
       {error, {bad_peer_conf, CustomPeerConf}}
   end.
 
+verify_fixture_init_state(#{fixture_init_state := Map}) when is_map(Map) ->
+  {ok, Map};
+verify_fixture_init_state(#{fixture_init_state := Bad}) ->
+  {error, {bad_fixture_init_state, Bad}};
+verify_fixture_init_state(#{}) ->
+  {ok, #{}}.
+
 -ifdef(TEST).
 
 with_defaults_test_() ->
@@ -339,6 +360,7 @@ with_defaults_test_() ->
              , auto_shutdown => true
              , fixtures => familiar_fixture:defaults()
              , subnet => 24
+             , fixture_init_state => #{}
              }},
        with_defaults(Conf0))
   , ?_assertMatch(
@@ -376,7 +398,7 @@ cluster_conf() ->
 verify_cluster_conf_prop() ->
   ?FORALL(T, cluster_conf(),
           case with_defaults(T) of
-            {ok, #{id := _, fixtures := _, peer := #{}, net := _, subnet := _}}  ->
+            {ok, #{id := _, fixtures := _, peer := #{}, net := _, subnet := _, fixture_init_state := _}}  ->
               true;
             {error, _} ->
               true;

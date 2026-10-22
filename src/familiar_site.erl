@@ -9,6 +9,7 @@
 -export([ is_running/1
         , which_node/1
         , last_node/1
+        , get_fixture_state/1
 
         , start/1
         , start/2
@@ -42,6 +43,7 @@
 -record(call_start, {opts :: map()}).
 -record(call_stop, {cleanup = true :: boolean()}).
 -record(call_last_node, {}).
+-record(call_get_fixture_state, {}).
 
 -type start_options() ::
         #{ peer        => peer:start_options()
@@ -85,6 +87,13 @@ last_node({ClusterId, SiteId}) ->
   gen_server:call(
     ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
     #call_last_node{},
+    infinity).
+
+-spec get_fixture_state(familiar:site()) -> familiar_fixture:state().
+get_fixture_state({ClusterId, SiteId}) ->
+  gen_server:call(
+    ?via(#fam_reg_site{cluster = ClusterId, site = SiteId}),
+    #call_get_fixture_state{},
     infinity).
 
 %% @doc Start the site if stopped.
@@ -208,6 +217,8 @@ handle_call(#call_is_running{}, _From, S = #s{pid = Pid}) ->
   {reply, Reply, S};
 handle_call(#call_last_node{}, _From, S = #s{last_node = LastNode}) ->
   {reply, LastNode, S};
+handle_call(#call_get_fixture_state{}, _From, S = #s{fixture_state = FS}) ->
+  {reply, FS, S};
 handle_call(Call, From, S) ->
   ?tp(warning, ?familiar_unknown_event,
       #{ kind => call

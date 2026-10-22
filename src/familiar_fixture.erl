@@ -25,7 +25,7 @@
 -module(familiar_fixture).
 
 %% API:
--export([ init_per_cluster/2
+-export([ init_per_cluster/3
         , cleanup_per_cluster/4
 
         , init_per_site/3
@@ -38,6 +38,8 @@
         ]).
 
 -export_type([t/0, conf/0, state/0]).
+
+-include("familiar_internal.hrl").
 
 %%================================================================================
 %% Type declarations
@@ -77,13 +79,13 @@ IsKill = abrupt stop, normal clean up procedures should be ignored.
 %% API functions
 %%================================================================================
 
--spec init_per_cluster(familiar:cluster_id(), [t()]) -> {ok, state()} | {error, _}.
-init_per_cluster(ClusterId, Fixtures) ->
+-spec init_per_cluster(familiar:cluster_id(), [t()], state()) -> {ok, state()} | {error, _}.
+init_per_cluster(ClusterId, Fixtures, InitialState) ->
   Ret = fold_init(
           fun({Module, Conf}, Acc) ->
               safe_init_call(Module, init_per_cluster, [ClusterId, Conf, Acc])
           end,
-          #{},
+          InitialState,
           Fixtures),
   case Ret of
     {ok, _} ->
@@ -134,7 +136,8 @@ init_per_node(Fixtures, Site, Node, State0) ->
           State0,
           Fixtures),
   case Ret of
-    {ok, _} ->
+    {ok, FinalState} ->
+      familiar_site:call(Site, persistent_term, put, [?familiar_fixture_state, FinalState]),
       Ret;
     {error, OkFixtures, State, Reason} ->
       cleanup_per_node(OkFixtures, Site, Node, State, true),

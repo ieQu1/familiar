@@ -30,10 +30,10 @@
 %%================================================================================
 
 -type conf() :: #{ app       := atom()
-                 , env       => map() | fun((famliar:site(), node(), _State) -> map())
+                 , env       => map() | fun((familiar:site(), node(), _State) -> map())
                  , start     => boolean()
                  , timeout   => timeout()
-                 , prep_stop => fun((famliar:site(), node(), _State) -> _)
+                 , prep_stop => fun((familiar:site(), node(), _State) -> _)
                  }.
 
 %%================================================================================
