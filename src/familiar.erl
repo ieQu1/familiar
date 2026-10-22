@@ -21,6 +21,7 @@
 
         , fixture_state/1
         , fixture_state/0
+        , merge_fixtures/2
 
         , call/2
         , call/3
@@ -156,6 +157,27 @@ fixture_state(Site) ->
 -spec fixture_state() -> familiar_fixture:state().
 fixture_state() ->
   persistent_term:get(?familiar_fixture_state).
+
+%% @doc Merge two lists of fixtures as following:
+%%
+%% 1. If the fixture with a given module is present in both lists,
+%%    then the configuration is taken from first similar fixture of the second list.
+%%
+%% 2. If a fixture with a given module is not present in the second list,
+%%    it is kept as is.
+%%
+%% 3. Any fixtures that are only present in the second list (or the duplicates)
+%%    are appended to the resulting list in the original order.
+-spec merge_fixtures([familiar_fixture:t()], [familiar_fixture:t()]) -> [familiar_fixture:t()].
+merge_fixtures([], Lb) ->
+  Lb;
+merge_fixtures([{T, _} = A | La], Lb0) ->
+  case lists:keytake(T, 1, Lb0) of
+    {value, B, Lb} ->
+      [B | merge_fixtures(La, Lb)];
+    false ->
+      [A | merge_fixtures(La, Lb0)]
+  end.
 
 -spec ensure_distr(#{name => atom(), _ => _}) -> ok.
 ensure_distr(Opts0) ->
@@ -405,5 +427,22 @@ verify_cluster_conf_prop() ->
             Ret ->
               error({T, '->', Ret})
           end).
+
+merge_fixtures_test() ->
+  ?assertMatch(
+     [{a, 1}, {b, 2}, {c, 3}, {d, 4}],
+     merge_fixtures(
+       [{a, 1}, {b, 2}],
+       [{c, 3}, {d, 4}])),
+  ?assertMatch(
+     [{a, 3}, {b, 2}, {c, 3}],
+     merge_fixtures(
+       [{a, 1}, {b, 2}],
+       [{a, 3}, {c, 3}])),
+  ?assertMatch(
+     [{a, 3}, {b, 2}, {c, 3}, {a, 4}],
+     merge_fixtures(
+       [{a, 1}, {b, 2}],
+       [{a, 3}, {c, 3}, {a, 4}])).
 
 -endif.
