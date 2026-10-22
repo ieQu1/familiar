@@ -95,12 +95,13 @@ set_fail(Id) ->
 init([Parent, Conf]) ->
   process_flag(trap_exit, true),
   maybe
-    #{ id       := ClusterId
-     , fixtures := Fixtures
-     , net      := Net
-     , subnet   := SubNet
+    #{ id                 := ClusterId
+     , fixtures           := Fixtures
+     , net                := Net
+     , subnet             := SubNet
+     , fixture_init_state := InitState
      } ?= Conf,
-    {ok, FixtureState} ?= familiar_fixture:init_per_cluster(ClusterId, Fixtures),
+    {ok, FixtureState} ?= familiar_fixture:init_per_cluster(ClusterId, Fixtures, InitState),
     S = #s{ parent_sup = Parent
           , conf       = Conf
           , fstate     = FixtureState

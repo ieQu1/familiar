@@ -25,7 +25,7 @@
 -module(familiar_fixture).
 
 %% API:
--export([ init_per_cluster/2
+-export([ init_per_cluster/3
         , cleanup_per_cluster/4
 
         , init_per_site/3
@@ -77,13 +77,13 @@ IsKill = abrupt stop, normal clean up procedures should be ignored.
 %% API functions
 %%================================================================================
 
--spec init_per_cluster(familiar:cluster_id(), [t()]) -> {ok, state()} | {error, _}.
-init_per_cluster(ClusterId, Fixtures) ->
+-spec init_per_cluster(familiar:cluster_id(), [t()], state()) -> {ok, state()} | {error, _}.
+init_per_cluster(ClusterId, Fixtures, InitialState) ->
   Ret = fold_init(
           fun({Module, Conf}, Acc) ->
               safe_init_call(Module, init_per_cluster, [ClusterId, Conf, Acc])
           end,
-          #{},
+          InitialState,
           Fixtures),
   case Ret of
     {ok, _} ->

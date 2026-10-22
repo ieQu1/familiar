@@ -49,12 +49,13 @@
 -type site() :: {cluster_id(), site_id()}.
 
 -type cluster_conf() ::
-        #{ id       := cluster_id()
-         , fixtures => [familiar_fixture:t()]
-         , peer     => peer:start_options()
-         , net      => {byte(), byte(), byte(), byte()}
-         , subnet   => 0..32
-         , _        => _
+        #{ id                 := cluster_id()
+         , fixtures           => [familiar_fixture:t()]
+         , peer               => peer:start_options()
+         , net                => {byte(), byte(), byte(), byte()}
+         , subnet             => 0..32
+         , fixture_init_state => map()
+         , _                  => _
          }.
 
 -type site_conf() ::
@@ -247,17 +248,19 @@ ensure_epmd() ->
 with_defaults(Conf) when is_map(Conf) ->
   maybe
     {ok, AutoShutdown} ?= verify_auto_shutdown(Conf),
-    {ok, Id} ?= verify_id(Conf),
-    {ok, Fixtures} ?= verify_fixtures(Conf),
-    {ok, Net, SubNet} ?= verify_net(Conf),
-    {ok, Peer} ?= verify_peer(Conf),
+    {ok, Id}           ?= verify_id(Conf),
+    {ok, Fixtures}     ?= verify_fixtures(Conf),
+    {ok, Net, SubNet}  ?= verify_net(Conf),
+    {ok, Peer}         ?= verify_peer(Conf),
+    {ok, InitState}    ?= verify_fixture_init_state(Conf),
     {ok,
-     #{ id            => Id
-      , auto_shutdown => AutoShutdown
-      , fixtures      => Fixtures
-      , peer          => Peer
-      , net           => Net
-      , subnet        => SubNet
+     #{ id                 => Id
+      , auto_shutdown      => AutoShutdown
+      , fixtures           => Fixtures
+      , peer               => Peer
+      , net                => Net
+      , subnet             => SubNet
+      , fixture_init_state => InitState
       }}
   end;
 with_defaults(_Conf) ->
@@ -324,6 +327,13 @@ verify_peer(Conf) ->
       {error, {bad_peer_conf, CustomPeerConf}}
   end.
 
+verify_fixture_init_state(#{fixture_init_state := Map}) when is_map(Map) ->
+  {ok, Map};
+verify_fixture_init_state(#{fixture_init_state := Bad}) ->
+  {error, {bad_fixture_init_state, Bad}};
+verify_fixture_init_state(#{}) ->
+  {ok, #{}}.
+
 -ifdef(TEST).
 
 with_defaults_test_() ->
@@ -339,6 +349,7 @@ with_defaults_test_() ->
              , auto_shutdown => true
              , fixtures => familiar_fixture:defaults()
              , subnet => 24
+             , fixture_init_state => #{}
              }},
        with_defaults(Conf0))
   , ?_assertMatch(
@@ -376,7 +387,7 @@ cluster_conf() ->
 verify_cluster_conf_prop() ->
   ?FORALL(T, cluster_conf(),
           case with_defaults(T) of
-            {ok, #{id := _, fixtures := _, peer := #{}, net := _, subnet := _}}  ->
+            {ok, #{id := _, fixtures := _, peer := #{}, net := _, subnet := _, fixture_init_state := _}}  ->
               true;
             {error, _} ->
               true;
